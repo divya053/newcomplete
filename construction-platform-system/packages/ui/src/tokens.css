@@ -1,0 +1,76 @@
+/*
+ * Design tokens (ws 0.9, guardrail #8) — the single source of visual truth.
+ * Every app styles from these CSS variables (surfaced to Tailwind via the shared
+ * preset in @ci/config). Per-tenant white-label overrides these at runtime by
+ * injecting tenant_theme.brand_tokens onto :root — no rebuild. HSL channel values
+ * (no hsl() wrapper) so Tailwind's <alpha-value> works.
+ *
+ * PALETTE: Preckon DS-01 (ported from the marketing site + host-console mocks).
+ *   teal   #15C2A8  (brand primary)      · blue  #3B82F6 (info / trial)
+ *   ink    #0B1B2B  (navy foreground)    · amber #F5A524 (warning / past-due)
+ *   red    #EF4444  (destructive)        · paper #F4F7FB (light bg)
+ * Dark is the navy host-console theme (paper #0A1626 / surface #0F2033).
+ */
+:root {
+  --color-background: 214 47% 97%; /* paper #F4F7FB */
+  --color-foreground: 210 59% 11%; /* ink  #0B1B2B */
+  --color-card: 0 0% 100%; /* surface #FFFFFF */
+
+  /* Preckon teal — the brand primary. */
+  --color-primary: 171 80% 42%; /* #15C2A8 */
+  --color-primary-foreground: 210 59% 11%; /* ink on teal (per mock) */
+
+  /* Secondary hues — the mock's status language. */
+  --color-accent: 217 91% 60%; /* blue #3B82F6 — info / trial / links */
+  --color-accent-foreground: 0 0% 100%;
+  --color-success: 171 80% 38%; /* teal — published / approved / active */
+  --color-success-foreground: 0 0% 100%;
+  --color-warning: 38 91% 55%; /* amber #F5A524 — under review / past-due / beta */
+  --color-warning-foreground: 30 45% 14%;
+  --color-destructive: 0 84% 60%; /* red #EF4444 — suspended / failed */
+  --color-destructive-foreground: 0 0% 100%;
+
+  --color-muted: 210 40% 96%; /* panel-2 #F1F5F9 */
+  --color-muted-foreground: 215 16% 47%; /* slate-500 #64748B */
+  --color-border: 215 28% 91%; /* hairline #E3E8EF */
+  --color-ring: 173 83% 35%; /* teal-press #0FA593 */
+
+  --radius-sm: 0.625rem; /* 10px — Preckon --r-sm */
+  --radius-md: 0.75rem;
+  --radius-lg: 0.875rem; /* 14px cards */
+
+  --space-unit: 0.25rem;
+
+  --shadow-sm: 0 1px 2px 0 hsl(210 59% 11% / 0.06);
+  --shadow-md: 0 8px 24px -10px hsl(210 59% 11% / 0.18);
+
+  --font-body: "Inter", system-ui, -apple-system, sans-serif;
+  --font-display: "General Sans", "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+}
+
+.dark {
+  --color-background: 214 58% 9%; /* paper #0A1626 */
+  --color-foreground: 210 50% 95%; /* ink #EAF1F8 */
+  --color-card: 212 55% 13%; /* surface #0F2033 */
+
+  --color-primary: 172 70% 48%; /* brighter teal on navy */
+  --color-primary-foreground: 214 58% 9%;
+
+  --color-accent: 217 91% 66%;
+  --color-accent-foreground: 214 58% 9%;
+  --color-success: 172 66% 46%;
+  --color-success-foreground: 214 58% 9%;
+  --color-warning: 38 90% 58%;
+  --color-warning-foreground: 30 45% 12%;
+  --color-destructive: 0 74% 62%;
+  --color-destructive-foreground: 0 0% 100%;
+
+  --color-muted: 213 55% 12%; /* panel-2 #0C1B2E */
+  --color-muted-foreground: 214 16% 62%; /* slate-500 dark #8493A6 */
+  --color-border: 215 47% 21%; /* hairline #1D3250 */
+  --color-ring: 172 70% 48%;
+
+  --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.4);
+  --shadow-md: 0 20px 50px -30px hsl(0 0% 0% / 0.7);
+}

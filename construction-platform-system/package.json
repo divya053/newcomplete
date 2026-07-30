@@ -1,0 +1,30 @@
+{
+  "name": "construction-intelligence",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Construction Intelligence — Phase 0 enterprise-correct skeleton (TechSME). Two runtimes, one seam.",
+  "packageManager": "pnpm@9.12.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "node scripts/check-tenant-isolation.mjs && turbo run lint",
+    "lint:isolation": "node scripts/check-tenant-isolation.mjs",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "db:setup": "pnpm --filter @ci/db run setup",
+    "db:sync-roles": "pnpm --filter @ci/db run sync-roles",
+    "db:migrate": "pnpm --filter @ci/db migrate",
+    "db:reset": "pnpm --filter @ci/db reset",
+    "db:seed": "pnpm --filter @ci/db seed",
+    "db:seed-saas": "pnpm --filter @ci/db run seed-saas",
+    "db:seed-host": "pnpm --filter @ci/db run seed-host",
+    "infra:up": "docker compose -f infra/docker-compose.yml up -d",
+    "infra:down": "docker compose -f infra/docker-compose.yml down"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.9.4",
+    "turbo": "2.3.3",
+    "typescript": "5.7.2"
+  }
+}

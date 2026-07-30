@@ -1,0 +1,20 @@
+# Deploy pipeline STUB (ws 0.7.3). Containerizes both runtimes regardless of the
+# final hosting target (open decision §9 — design behind the interface, don't guess).
+# Builds the images and "ships" to a placeholder. Swap the publish step for the real
+# registry/host once the platform is chosen — no re-architecting needed.
+name: deploy-stub
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-images:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build web image
+        run: docker build -f apps/web/Dockerfile -t ci-web:${{ github.sha }} .
+      - name: Build ai image
+        run: docker build -f services/ai/Dockerfile -t ci-ai:${{ github.sha }} .
+      - name: Deploy (placeholder)
+        run: echo "TODO: push to chosen registry + deploy to chosen host (open decision §9)."

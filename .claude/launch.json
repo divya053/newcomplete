@@ -1,0 +1,32 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "boq-platform",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "set PORT=5173 && set BASE_PATH=/ && pnpm --config.verify-deps-before-run=false --filter @workspace/boq-platform run dev"
+      ],
+      "port": 5173
+    },
+    {
+      "name": "mockup-sandbox",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "set PORT=5174 && set BASE_PATH=/ && pnpm --config.verify-deps-before-run=false --filter @workspace/mockup-sandbox run dev"
+      ],
+      "port": 5174
+    },
+    {
+      "name": "api-server",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "set PORT=5000 && set DATABASE_URL=mysql://root@localhost:3306/boq_tender && pnpm --config.verify-deps-before-run=false --filter @workspace/api-server run dev"
+      ],
+      "port": 5000
+    }
+  ]
+}

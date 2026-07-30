@@ -1,0 +1,39 @@
+{
+  "name": "@ci/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema/index.ts",
+    "./scoped": "./src/scoped.ts",
+    "./audit": "./src/audit.ts"
+  },
+  "scripts": {
+    "lint": "biome check .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "setup": "tsx scripts/setup-mysql.ts",
+    "sync-roles": "tsx scripts/sync-system-roles.ts",
+    "migrate": "tsx scripts/migrate.ts",
+    "reset": "tsx scripts/reset.ts",
+    "seed": "tsx scripts/seed.ts",
+    "seed-saas": "tsx scripts/seed-saas.ts",
+    "seed-host": "tsx scripts/seed-host.ts",
+    "generate": "drizzle-kit generate"
+  },
+  "dependencies": {
+    "@ci/shared": "workspace:*",
+    "drizzle-orm": "0.38.3",
+    "mysql2": "3.11.5",
+    "uuid": "11.0.3"
+  },
+  "devDependencies": {
+    "@ci/config": "workspace:*",
+    "@types/node": "22.10.2",
+    "drizzle-kit": "0.30.1",
+    "tsx": "4.19.2",
+    "typescript": "5.7.2",
+    "vitest": "2.1.8"
+  }
+}

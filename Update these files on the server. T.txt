@@ -1,0 +1,36 @@
+Update these files on the server. These are the changes that matter for the fix:
+
+shared/base-path.ts
+vite.config.ts
+server/vite.ts
+server/static.ts
+server/index.ts
+Checklist
+
+Copy those 5 files to your server repo/worktree.
+On the server, pull or upload the updated code.
+Install deps if needed:
+npm install
+Build again:
+npm run build
+Restart the app/process:
+npm run start:prod
+Or restart your PM2/Docker/systemd service if that is what you use.
+6. Make sure your env still has:
+
+PORT=8000
+APP_BASE_PATH=/leadsync
+NODE_ENV=production
+Open the live URL:
+https://your-domain.com/leadsync/login
+What these fixes do
+
+Fix blank page caused by process is not defined
+Fix dev/prod base path handling under /leadsync
+Fix app shell routing for /leadsync and /leadsync/login
+Make startup faster by moving warmup after server listen
+If you want, I can also give you:
+
+a git diff summary to apply on the server
+exact PM2 commands
+exact Docker redeploy commands

@@ -1,0 +1,48 @@
+# Backing services for local dev (§4.2). OPTIONAL — if you already run XAMPP, its
+# MariaDB on :3306 is the database and you don't need the `mariadb`/`phpmyadmin`
+# services here (only `redis` + `minio`, which XAMPP doesn't provide).
+# Local-only credentials below — NEVER real secrets (guardrail #10).
+services:
+  mariadb:
+    image: mariadb:10.4 # matches the XAMPP engine
+    environment:
+      MARIADB_ROOT_PASSWORD: ci_local_dev
+      MARIADB_DATABASE: construction_intelligence
+    ports: ["3306:3306"]
+    volumes:
+      - mysqldata:/var/lib/mysql
+      # Creates the non-DDL ci_app user on first boot (mirrors `pnpm db:setup`).
+      - ./mysql-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      retries: 10
+
+  phpmyadmin:
+    image: phpmyadmin:5 # browse the DB at http://localhost:8080
+    environment:
+      PMA_HOST: mariadb
+      PMA_PORT: 3306
+    ports: ["8080:80"]
+    depends_on: [mariadb]
+
+  redis:
+    image: redis:7-alpine # arq broker + the cross-runtime seam
+    ports: ["6379:6379"]
+
+  minio:
+    image: minio/minio # S3-compatible object storage (R2 in prod)
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ci_minio
+      MINIO_ROOT_PASSWORD: ci_minio_local
+    ports: ["9000:9000", "9001:9001"]
+    volumes:
+      - minio:/data
+
+# NOTE: when using THIS compose file (not XAMPP), root has password ci_local_dev, so
+# set DATABASE_URL=mysql://root:ci_local_dev@localhost:3306/construction_intelligence
+
+volumes:
+  mysqldata:
+  minio:

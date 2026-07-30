@@ -1,0 +1,27 @@
+{
+  "name": "@ci/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./jobs": "./src/jobs.ts",
+    "./permissions": "./src/permissions.ts",
+    "./roles": "./src/roles.ts",
+    "./lifecycle": "./src/lifecycle.ts"
+  },
+  "scripts": {
+    "lint": "biome check .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "3.24.1",
+    "uuid": "11.0.3"
+  },
+  "devDependencies": {
+    "@ci/config": "workspace:*",
+    "typescript": "5.7.2",
+    "vitest": "2.1.8"
+  }
+}

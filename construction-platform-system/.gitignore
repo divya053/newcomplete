@@ -1,0 +1,35 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# builds
+dist/
+.next/
+.turbo/
+*.tsbuildinfo
+
+# python
+services/ai/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# secrets — NEVER commit (guardrail #10)
+.env
+.env.*
+!.env.example
+
+# local data
+infra/data/
+*.log
+
+# editor / os
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+
+# Local upload storage (DrawLogix dev)
+var/
+**/var/

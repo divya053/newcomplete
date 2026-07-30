@@ -1,0 +1,8 @@
+# Enforce LF line endings everywhere (WSL2 gotcha — §4.5). Never let Windows
+# checkouts rewrite to CRLF; it silently breaks shell scripts and Docker entrypoints.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff2 binary

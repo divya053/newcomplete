@@ -1,0 +1,9 @@
+{
+  "suite": "seed",
+  "description": "Synthetic Phase 0 cases. They prove the harness RUNS and GATES; they are not a calibrated baseline (that arrives with the first pilot, Phase 3).",
+  "cases": [
+    { "id": "echo-1", "input": { "echo": "alpha" }, "expected": "alpha" },
+    { "id": "echo-2", "input": { "echo": "bravo" }, "expected": "bravo" },
+    { "id": "echo-3", "input": { "echo": "charlie" }, "expected": "charlie" }
+  ]
+}

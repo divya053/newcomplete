@@ -1,0 +1,28 @@
+/* tokens.css is imported first in app/layout.tsx so the CSS variables exist before
+   Tailwind's utilities reference them. */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
+@import url("https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background: hsl(var(--color-background));
+  color: hsl(var(--color-foreground));
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, .font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+/* Preckon's blueprint-grid backdrop — subtle measured-line motif behind the shell. */
+.bp-grid {
+  background-image:
+    linear-gradient(hsl(var(--color-border) / 0.5) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--color-border) / 0.5) 1px, transparent 1px);
+  background-size: 26px 26px;
+}

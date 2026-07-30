@@ -1,0 +1,48 @@
+server {
+    listen 80;
+    server_name ikiousa.tech www.ikiousa.tech;
+
+    # Redirect HTTP → HTTPS
+    return 301 https://ikiousa.tech$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name ikiousa.tech www.ikiousa.tech;
+
+    ssl_certificate /etc/letsencrypt/live/ikiousa.tech/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/ikiousa.tech/privkey.pem;
+
+    client_max_body_size 50M;
+
+    # Logs
+    access_log /var/log/nginx/escotracker_access.log;
+    error_log /var/log/nginx/escotracker_error.log;
+
+    # Proxy to Gunicorn (SOCKET)
+    location / {
+        proxy_pass http://unix:/home/ikiousa/escotracker/ESCOTRACKER/escotracker.sock;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        proxy_read_timeout 300;
+    }
+
+    # Static files
+    location /static/ {
+        alias /home/ikiousa/escotracker/ESCOTRACKER/static/;
+        expires 30d;
+    }
+
+    location /uploads/ {
+        alias /home/ikiousa/escotracker/ESCOTRACKER/uploads/;
+        expires 7d;
+    }
+}

@@ -1,0 +1,21 @@
+# The path-filtered eval gate (ws 0.7.3 + 0.8.4). Fires ONLY on AI-touching PRs;
+# runs the eval harness and fails on an accuracy/calibration regression. Phase 0
+# proves the harness runs and GATES — thresholds are placeholders until the first
+# pilot sets a calibrated baseline (Phase 3), so the fail-under bars are illustrative.
+name: eval-gate
+on:
+  pull_request:
+    paths:
+      - "services/ai/**"
+      - "packages/eval/**"
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -e packages/eval
+      - name: Run eval harness (gates on thresholds)
+        run: python -m eval.run --suite seed --fail-under "accuracy=0.70,calibration=0.60"

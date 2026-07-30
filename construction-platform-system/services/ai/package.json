@@ -1,0 +1,12 @@
+{
+  "name": "@ci/ai",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Thin workspace shim so turbo orchestrates the Python AI tier alongside web. The real code is Python (app/).",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "lint": "ruff check . && ruff format --check .",
+    "typecheck": "mypy app",
+    "test": "pytest -q"
+  }
+}

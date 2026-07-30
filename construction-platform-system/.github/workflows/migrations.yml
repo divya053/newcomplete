@@ -1,0 +1,49 @@
+# Migration gate (ws 0.7.3) — two checks:
+#  1. expand-contract guard: rejects a destructive op in a NEW migration (guardrail #5).
+#  2. forward-apply + isolation test on a throwaway MariaDB (exit gate #2).
+name: migrations
+on:
+  pull_request:
+    paths:
+      - "packages/db/**"
+
+jobs:
+  expand-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Reject destructive migration ops
+        run: node packages/db/scripts/check-migrations.mjs
+
+  forward-apply-and-isolation:
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:10.4
+        env:
+          MARIADB_ROOT_PASSWORD: ci_local_dev
+          MARIADB_DATABASE: construction_intelligence
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s --health-retries 10
+    env:
+      # Root has a password under the service container (unlike the XAMPP default).
+      DATABASE_URL: mysql://root:ci_local_dev@127.0.0.1:3306/construction_intelligence
+      APP_DATABASE_URL: mysql://ci_app:ci_app_local_dev@127.0.0.1:3306/construction_intelligence
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Create the db + non-DDL app user
+        run: pnpm db:setup
+      - run: pnpm db:migrate
+      - run: pnpm db:seed
+      - name: Cross-tenant isolation test (app-enforced scoping)
+        run: pnpm --filter @ci/db test
