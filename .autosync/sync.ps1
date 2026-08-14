@@ -81,6 +81,56 @@ try {
         exit 1
     }
     Write-Log 'OK' "pushed to origin/$Branch"
+
+    # ── Mirror the published subtree to the organisation repository ───────────
+    #
+    # origin is the working monorepo. techsmeinc/preckon-tenant is the artefact
+    # the org reviews and the server deploys from, and it holds preckon-tenant/
+    # at its ROOT — so it cannot be a plain push, it needs a subtree split.
+    #
+    # Deliberately fail-soft. A mirror that cannot reach GitHub must never cost
+    # the local commit that already succeeded above; the next run picks it up.
+    #
+    # Off unless asked for, because the split walks the whole history and that is
+    # not something to run every few minutes without meaning to:
+    #   setx PRECKON_MIRROR 1
+    if ($env:PRECKON_MIRROR -eq '1') {
+        $remote = 'techsme-tenant'
+        $url    = 'https://github.com/techsmeinc/preckon-tenant.git'
+
+        if (-not (git remote | Select-String -SimpleMatch $remote -Quiet)) {
+            git remote add $remote $url
+            Write-Log 'OK' "added remote $remote"
+        }
+
+        git branch -D preckon-tenant-export --quiet 2>$null
+        git subtree split -P Preckon-system/preckon-tenant -b preckon-tenant-export --quiet 2>$null
+
+        if ($LASTEXITCODE -ne 0) {
+            Write-Log 'WARN' 'subtree split failed - mirror skipped, origin is still up to date'
+        }
+        else {
+            # --force-with-lease against the CURRENT remote tip: the histories are
+            # unrelated by construction, so this is always a force, but it must
+            # still refuse if somebody else moved the branch since we looked.
+            $lease = (git ls-remote $remote refs/heads/main | ForEach-Object { ($_ -split "`t")[0] })
+            if ($lease) {
+                git push --force-with-lease=refs/heads/main:$lease $remote preckon-tenant-export:main --quiet 2>$null
+            } else {
+                git push $remote preckon-tenant-export:main --quiet 2>$null
+            }
+
+            if ($LASTEXITCODE -ne 0) {
+                # The commonest cause by a distance: the stored token has no
+                # `workflow` scope, so any push carrying .github/workflows is
+                # refused outright. Say so rather than leaving a bare failure.
+                Write-Log 'WARN' "mirror to $remote failed - if it mentions 'workflow scope', grant that scope to the PAT; origin is unaffected"
+            }
+            else {
+                Write-Log 'OK' "mirrored preckon-tenant to $remote/main"
+            }
+        }
+    }
 }
 catch {
     Write-Log 'ERROR' $_.Exception.Message
