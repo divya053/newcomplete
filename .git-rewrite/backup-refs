@@ -1,0 +1,10 @@
+fce7a04b5b0fce440f9d114a3b4f585b75bb1116 commit	refs/heads/_mirror
+d78cf85816ec16b9d8ec3365df759d9bc25eb15d commit	refs/heads/main
+bb310a4f678b672169bb1a19f199727cdcfadd66 commit	refs/heads/preckon-system-export
+bf665fc0ce04c5cd2f12b7754eba3324617def64 commit	refs/heads/preckon-tenant-export
+d78cf85816ec16b9d8ec3365df759d9bc25eb15d commit	refs/remotes/origin/HEAD
+d78cf85816ec16b9d8ec3365df759d9bc25eb15d commit	refs/remotes/origin/main
+12799e6fc0c88cd93cdf2261fdee3de63cf4ef92 commit	refs/remotes/techsme-tenant/HEAD
+12799e6fc0c88cd93cdf2261fdee3de63cf4ef92 commit	refs/remotes/techsme-tenant/main
+91e67b10d5bdb57b953780f6944aca4ff892b7b1 commit	refs/remotes/techsme-tenant/pre-sync-2026-08-13
+0e3a7988a0dc29b4bdfec8527ee410c9232bbec9 commit	refs/remotes/techsme/main
