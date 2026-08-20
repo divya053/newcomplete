@@ -62,3 +62,9 @@ desktop.ini
 
 # ---- Autosync runtime log (the script itself IS versioned) ----
 .autosync/sync.log
+
+# ---- git subtree split scratch ----
+# `git subtree split` - how the techsmeinc mirrors are published - leaves this
+# in the repo root. It is git's own filter-branch scratch space: refs, an index
+# and a commit map. Autosync committed all 29 files of it before anyone noticed.
+.git-rewrite/
