@@ -246,7 +246,8 @@ export async function runBimAgent2<Doc = BimDocument, Cmd = Command>({
 
     // ── ask_user ────────────────────────────────────────────────────────────
     if (toolUse.name === "ask_user") {
-      return { status: "needs_input", reply: asText(toolUse.input?.question) || "Could you clarify?", trace };
+      exit = { status: "needs_input", reply: asText(toolUse.input?.question) || "Could you clarify?", trace };
+      break;
     }
 
     // ── discover_tools ──────────────────────────────────────────────────────
@@ -318,7 +319,7 @@ export async function runBimAgent2<Doc = BimDocument, Cmd = Command>({
       // action. Shall I proceed to place 216 W10X49 columns?" moment.
       const n = result.affected ?? 0;
       if (result.ok && result.commands?.length && n > confirmThreshold && !preapproved) {
-        return {
+        exit = {
           status: "needs_confirmation",
           reply: `${result.summary} This is a large action — ${n} elements would change.${result.assumptions?.length ? ` Assumptions: ${result.assumptions.join(" ")}` : ""} Shall I proceed?`,
           pending: {
@@ -332,6 +333,7 @@ export async function runBimAgent2<Doc = BimDocument, Cmd = Command>({
           },
           trace,
         };
+        break;
       }
 
       if (result.ok && result.commands?.length) {
@@ -350,11 +352,18 @@ export async function runBimAgent2<Doc = BimDocument, Cmd = Command>({
           .join("\n\n"),
       );
 
-      if (toolUse.input?.done) break;
+      if (toolUse.input?.done) { finished = true; break; }
       continue;
     }
 
-    say(`Unknown tool "${toolUse.name}".`);
+      say(`Unknown tool "${toolUse.name}".`);
+    }
+
+    /* One user message carrying every result, in order — the shape the API
+       requires and the shape this loop failed to produce. */
+    if (results.length) messages.push({ role: "user", content: results });
+    if (exit) return exit;
+    if (finished) break;
   }
 
   return {
