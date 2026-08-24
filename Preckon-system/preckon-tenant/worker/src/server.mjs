@@ -80,8 +80,56 @@ const server = http.createServer(async (req, res) => {
           ...(body.output_config ? { output_config: body.output_config } : {}),
         }),
       });
-      const text = await upstream.text();
-      res.writeHead(upstream.status, { "content-type": "application/json" }).end(text);
+      let text = await upstream.text();
+      let status = upstream.status;
+
+      /* Retry what is worth retrying.
+         529 (overloaded), 429 (rate limited) and the 5xx family are transient by
+         definition — the same request a moment later usually works. Passing them
+         straight through turned a two-second blip into a failed instruction the
+         user had to retype, which is what "it stops working after two or three
+         commands" looked like from the outside.
+
+         Bounded and short: three attempts, exponential, no jitter needed at this
+         concurrency. A 400 is NOT retried — the request is wrong and sending it
+         again just wastes the user's time twice more. */
+      for (let attempt = 1; attempt <= 3 && (status === 429 || status === 529 || status >= 500); attempt++) {
+        const wait = 500 * 2 ** (attempt - 1);
+        console.error(`[worker] claude ${status} — retry ${attempt}/3 in ${wait}ms`);
+        await new Promise((r) => setTimeout(r, wait));
+        const retry = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "x-api-key": process.env.ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            model: body.model,
+            max_tokens: body.maxTokens ?? 2000,
+            system: body.system,
+            messages: body.messages ?? [],
+            ...(body.tools ? { tools: body.tools } : {}),
+            ...(body.thinking ? { thinking: body.thinking } : {}),
+            ...(body.output_config ? { output_config: body.output_config } : {}),
+          }),
+        });
+        text = await retry.text();
+        status = retry.status;
+      }
+
+      /* Say what upstream actually said.
+         This proxy forwarded the body verbatim and logged nothing, so when the
+         API rejected a request the reason existed only in a response nobody
+         read. Every BIM Studio failure reached the user as "[object Object]"
+         and reached the operator as nothing at all. */
+      if (status >= 400) {
+        let why = text.slice(0, 300);
+        try { why = JSON.parse(text)?.error?.message ?? why; } catch { /* keep raw */ }
+        console.error(`[worker] claude ${status}: ${why}`);
+      }
+
+      res.writeHead(status, { "content-type": "application/json" }).end(text);
     } catch (e) {
       res.writeHead(502, { "content-type": "application/json" })
          .end(JSON.stringify({ error: String(e?.message ?? e) }));
