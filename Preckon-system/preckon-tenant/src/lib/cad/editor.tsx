@@ -19,7 +19,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DxfParser from "dxf-parser";
-import { api } from "@/lib/apiclient";
+import { api, readableMessage } from "@/lib/apiclient";
 import { useCan, useToast } from "@/lib/ui";
 import { useI18n } from "@/lib/i18n";
 import { cachedText } from "@/lib/desktop";
@@ -409,12 +409,12 @@ export function CadEditor({
         if (applied || removed) apply(out.model);
       }
       setChat((c) => [...c, {
-        q: instruction, a: r.question ?? r.reply, ops: applied, removed,
+        q: instruction, a: readableMessage(r.question ?? r.reply, t("common.loadFail")), ops: applied, removed,
         trace: r.trace, assumptions: r.assumptions, question: r.status === "needs_input",
       }]);
       setAsk("");
     } catch (e: any) {
-      setChat((c) => [...c, { q: instruction, a: e?.message ?? t("common.loadFail"), ops: 0 }]);
+      setChat((c) => [...c, { q: instruction, a: readableMessage(e?.message ?? e, t("common.loadFail")), ops: 0 }]);
     } finally {
       setAsking(false);
     }
@@ -445,7 +445,7 @@ export function CadEditor({
       setChat((c) => [...c, { q, a: r.answer, ops: applied, removed }]);
       setAsk("");
     } catch (e: any) {
-      setChat((c) => [...c, { q, a: e?.message ?? t("common.loadFail"), ops: 0 }]);
+      setChat((c) => [...c, { q, a: readableMessage(e?.message ?? e, t("common.loadFail")), ops: 0 }]);
     } finally {
       setAsking(false);
     }
