@@ -207,18 +207,42 @@ export async function runBimAgent2<Doc = BimDocument, Cmd = Command>({
       // full turn plus its tool call.
       maxTokens: 8000,
     });
-    const toolUse = (res.content ?? []).find((c: any) => c.type === "tool_use");
+    /* EVERY tool_use in the turn, not just the first.
+       The model may emit several tool calls in one message, and does so more
+       often as a task gets more involved. This loop used to take `.find(...)`,
+       push the whole assistant message, and answer only that one — leaving the
+       rest with no tool_result. The API then rejects the NEXT request:
+
+         messages.2: `tool_use` ids were found without `tool_result` blocks
+         immediately after: toolu_… Each `tool_use` block must have a
+         corresponding `tool_result` block in the next message.
+
+       Which is why BIM Studio worked for two or three instructions and then
+       stopped: the more the model had to plan, the likelier it was to batch its
+       calls, and the first batch poisoned the conversation for good. */
+    const toolUses = (res.content ?? []).filter((c: any) => c.type === "tool_use");
     const text = (res.content ?? []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("").trim();
 
-    if (!toolUse) {
+    if (!toolUses.length) {
       reply = text || reply;
       break;
     }
 
     messages.push({ role: "assistant", content: res.content });
 
-    const say = (content: string) =>
-      messages.push({ role: "user", content: [{ type: "tool_result", tool_use_id: toolUse.id, content }] });
+    /* Results for this turn, one per tool_use, pushed together at the end.
+       Collected rather than pushed individually because the API wants them in a
+       single user message, in order. */
+    const results: any[] = [];
+    const answer = (id: string, content: string) => results.push({ type: "tool_result", tool_use_id: id, content });
+    /* Set when a path wants to leave the loop entirely. The remaining tool_uses
+       then go unanswered, which is safe precisely because we never call the API
+       again on this conversation. */
+    let exit: AgentOutcome<Cmd> | null = null;
+    let finished = false;
+
+    for (const toolUse of toolUses) {
+      const say = (content: string) => answer(toolUse.id, content);
 
     // ── ask_user ────────────────────────────────────────────────────────────
     if (toolUse.name === "ask_user") {
