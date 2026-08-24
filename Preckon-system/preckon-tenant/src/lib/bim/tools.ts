@@ -11,7 +11,7 @@
  */
 
 import type { Command } from "./commands";
-import { CATALOG, resolveCategory, suggestCategories, type Element, type Vec2, levels, linLength } from "./model";
+import { CATALOG, resolveCategory, suggestCategories, toVec2, type Element, type Vec2, levels, linLength } from "./model";
 import { count, explain, query, resolve, type Selector } from "./query";
 import type { Tool, ToolContext, ToolResult } from "./registry";
 import { DOCUMENTATION_TOOLS } from "./documentation";
@@ -292,9 +292,8 @@ const placeElements: Tool = {
       area: "outline:[{x,y},…] with at least 3 points",
       hosted: "host and offset",
     };
-    const vec = (o: unknown) =>
-      !!o && typeof o === "object" &&
-      Number.isFinite(Number((o as any).x)) && Number.isFinite(Number((o as any).y));
+    // Accepts {x,y} and [x,y] alike — see toVec2.
+    const vec = (o: unknown) => toVec2(o) !== null;
 
     const bad = list.findIndex((p: any) => {
       if (!p || typeof p !== "object") return true;
@@ -586,7 +585,7 @@ const placeAtPoints: Tool = {
     }
 
     const pts = (Array.isArray(a.points) ? a.points : [a.points]).filter(
-      (p: any) => Number.isFinite(Number(p?.x)) && Number.isFinite(Number(p?.y)),
+      (p: any) => toVec2(p) !== null,
     );
     if (!pts.length) return fail("No usable points given.", { affected: 0 });
 

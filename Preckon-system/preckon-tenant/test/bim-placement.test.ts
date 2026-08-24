@@ -15,7 +15,7 @@
 import { describe, it, expect } from "vitest";
 import { coerceArgs } from "@/lib/bim/registry";
 import { BUILTIN_TOOLS } from "@/lib/bim/tools";
-import { emptyDocument, resolveCategory, suggestCategories } from "@/lib/bim/model";
+import { emptyDocument, resolveCategory, suggestCategories, toVec2 } from "@/lib/bim/model";
 
 const place = BUILTIN_TOOLS.find((t) => t.name === "place_elements")!;
 const ctx = { doc: emptyDocument(), userId: "u1", discipline: "all" } as any;
@@ -188,5 +188,50 @@ describe("an empty array is a question, not a typo", () => {
     // Straight from the failing trace: "Walls" and "Wall".
     expect(resolveCategory("Walls")).toBe("wall");
     expect(resolveCategory("Wall")).toBe("wall");
+  });
+});
+
+describe("coordinates in either notation", () => {
+  it("reads [x,y] as well as {x,y}", () => {
+    /* Straight from the failing grid trace:
+         Got {"name":"A","start":[0,-1],"end":[0,11]}
+       The geometry was there. Rejecting it was a complaint about notation
+       dressed up as a complaint about missing geometry. */
+    expect(toVec2([0, -1])).toEqual({ x: 0, y: -1 });
+    expect(toVec2({ x: 0, y: -1 })).toEqual({ x: 0, y: -1 });
+  });
+
+  it("reads numeric strings, which models emit constantly", () => {
+    expect(toVec2(["0", "11"])).toEqual({ x: 0, y: 11 });
+    expect(toVec2({ x: "24000", y: "0" })).toEqual({ x: 24000, y: 0 });
+  });
+
+  it("still says no when there is genuinely no point", () => {
+    // "wrong shape" must stay distinguishable from "absent".
+    expect(toVec2(null)).toBeNull();
+    expect(toVec2([5])).toBeNull();
+    expect(toVec2({ x: 1 })).toBeNull();
+    expect(toVec2({ x: "left", y: 0 })).toBeNull();
+    expect(toVec2("somewhere")).toBeNull();
+  });
+
+  it("places a grid line given array coordinates", () => {
+    const r = place.run(ctx, {
+      category: "grid",
+      placements: [
+        { name: "A", start: [0, -1], end: [0, 11] },
+        { name: "B", start: [6, -1], end: [6, 11] },
+      ],
+    } as any);
+    expect(r.ok).toBe(true);
+    expect(r.affected).toBe(2);
+  });
+
+  it("places walls given array coordinates", () => {
+    const r = place.run(ctx, {
+      category: "wall",
+      placements: [{ start: [0, 0], end: [24000, 0] }],
+    } as any);
+    expect(r.ok).toBe(true);
   });
 });

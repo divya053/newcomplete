@@ -3,7 +3,7 @@
 // model, hands it to the Studio, and saves it back with optimistic concurrency.
 
 import { useEffect, useRef, useState } from "react";
-import { api } from "@/lib/apiclient";
+import { api, readableMessage } from "@/lib/apiclient";
 import { useApi, useCan, useToast, Skeleton, ErrorBox } from "@/lib/ui";
 import { useI18n, type Key } from "@/lib/i18n";
 import { BimStudio } from "./studio";
@@ -92,7 +92,14 @@ export function BimStudioPanel({ pid, onMeasured }: { pid: string; onMeasured?: 
         q: text,
         // A question is the reply when there is one — it is the RIGHT outcome
         // for an ambiguous instruction, not a failure.
-        a: r.question ?? r.reply ?? t("bim.noChange"),
+        //
+        // Coerced, because this is the last place a value becomes something a
+        // person reads. The schema says both fields are strings and the agent
+        // already coerces them — yet "[object Object]" has reached this panel
+        // twice, once from an error envelope and once from a path I have not
+        // identified. Whatever the source, printing that literal text tells the
+        // user nothing and hides the real outcome behind a shrug.
+        a: readableMessage(r.question ?? r.reply, t("bim.noChange")),
         trace: r.trace,
         assumptions: r.assumptions,
         question: !!r.question,
@@ -101,7 +108,7 @@ export function BimStudioPanel({ pid, onMeasured }: { pid: string; onMeasured?: 
       // anything else clears the box.
       if (!r.question) setInstruction("");
     } catch (e: any) {
-      setChat((c) => [...c, { q: text, a: e?.message ?? t("bim.drawFail") }]);
+      setChat((c) => [...c, { q: text, a: readableMessage(e?.message ?? e, t("bim.drawFail")) }]);
     } finally { setDrawing(false); }
   }
 

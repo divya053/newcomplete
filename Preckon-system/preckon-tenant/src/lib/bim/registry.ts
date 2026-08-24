@@ -18,6 +18,7 @@
 
 import type { Command } from "./commands";
 import type { BimDocument, Discipline, Element } from "./model";
+import { toVec2 } from "./model";
 
 export type ToolScope = "global" | "personal";
 export type ToolKind = "read" | "write";
@@ -281,11 +282,10 @@ export function coerceArgs(tool: Tool<any, any>, raw: Record<string, any> = {}):
         break;
       }
       case "vec2": {
-        const o = v as { x?: unknown; y?: unknown };
-        const x = Number(o?.x);
-        const y = Number(o?.y);
-        if (!Number.isFinite(x) || !Number.isFinite(y)) errors.push(`"${p.name}" must be {x,y}`);
-        else args[p.name] = { x, y };
+        // {x,y} or [x,y] — both are ordinary ways to write a coordinate.
+        const pt = toVec2(v);
+        if (!pt) errors.push(`"${p.name}" must be {x,y} or [x,y], got ${JSON.stringify(v)}`);
+        else args[p.name] = pt;
         break;
       }
       case "selector":

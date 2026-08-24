@@ -215,6 +215,47 @@ const CATEGORY_ALIASES: Record<string, string> = {
   glazing: "curtain_wall", opening: "door", doorway: "door",
 };
 
+/**
+ * Read a point from whatever shape it arrived in.
+ *
+ * `{x, y}` is what the schema advertises. `[x, y]` is what a model sends about
+ * as often — it is the ordinary way to write a coordinate, and the schema
+ * saying otherwise does not stop anyone. Rejecting it produced:
+ *
+ *   placements[0] is missing the geometry a grid line needs.
+ *   Got {"name":"A","start":[0,-1],"end":[0,11]}
+ *
+ * which is a complaint about notation dressed up as a complaint about missing
+ * geometry. The geometry was there. Both forms are unambiguous, both are
+ * trivially convertible, and refusing one costs a step from a budget of
+ * sixteen.
+ *
+ * Returns null when there is genuinely no point to read, so callers can still
+ * tell "wrong shape" from "absent".
+ */
+export function toVec2(v: unknown): Vec2 | null {
+  if (v == null) return null;
+
+  if (Array.isArray(v)) {
+    if (v.length < 2) return null;
+    const x = Number(v[0]);
+    const y = Number(v[1]);
+    return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+  }
+
+  if (typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    // {x,y} first, then the aliases that turn up in coordinate literals.
+    const rawX = o.x ?? o.X ?? o[0];
+    const rawY = o.y ?? o.Y ?? o[1];
+    const x = Number(rawX);
+    const y = Number(rawY);
+    return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+  }
+
+  return null;
+}
+
 /** Lowercase, strip punctuation, drop a trailing plural. */
 function normaliseCategory(raw: string): string {
   const s = String(raw ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
