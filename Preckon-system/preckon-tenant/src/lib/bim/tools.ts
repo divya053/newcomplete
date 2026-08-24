@@ -11,7 +11,7 @@
  */
 
 import type { Command } from "./commands";
-import { CATALOG, type Element, type Vec2, levels, linLength } from "./model";
+import { CATALOG, resolveCategory, suggestCategories, type Element, type Vec2, levels, linLength } from "./model";
 import { count, explain, query, resolve, type Selector } from "./query";
 import type { Tool, ToolContext, ToolResult } from "./registry";
 import { DOCUMENTATION_TOOLS } from "./documentation";
@@ -262,8 +262,21 @@ const placeElements: Tool = {
     },
   ],
   run: (ctx, a) => {
-    const item = CATALOG[a.category];
-    if (!item) return fail(`Unknown category "${a.category}". Use one from the catalog.`, { affected: 0 });
+    /* Accept the dialect, and when it cannot be resolved say what WOULD work.
+       "Use one from the catalog" does not name the catalog, so a model that
+       guessed wrong can only guess again — which is exactly what it did. */
+    const resolved = resolveCategory(a.category);
+    const item = resolved ? CATALOG[resolved] : undefined;
+    if (!item) {
+      const near = suggestCategories(a.category);
+      return fail(
+        `Unknown category "${a.category}". ` +
+        (near.length ? `Did you mean: ${near.join(", ")}? ` : "") +
+        `If that was a TYPE name rather than a category, pass the category (e.g. "wall") and put the type in params.`,
+        { affected: 0 },
+      );
+    }
+    a = { ...a, category: resolved } as typeof a;
     const list = Array.isArray(a.placements) ? a.placements : [a.placements];
     if (!list.length) return fail("No placements given.", { affected: 0 });
 
@@ -555,8 +568,18 @@ const placeAtPoints: Tool = {
     { name: "level", type: "string", description: "Level id" },
   ],
   run: (ctx, a) => {
-    const item = CATALOG[a.category];
-    if (!item) return fail(`Unknown category "${a.category}".`, { affected: 0 });
+    // Same dialect handling as place_elements — a caller who says OST_Columns
+    // here means the same thing they meant there.
+    const resolvedCat = resolveCategory(a.category);
+    const item = resolvedCat ? CATALOG[resolvedCat] : undefined;
+    if (!item) {
+      const near = suggestCategories(a.category);
+      return fail(
+        `Unknown category "${a.category}".` + (near.length ? ` Did you mean: ${near.join(", ")}?` : ""),
+        { affected: 0 },
+      );
+    }
+    a = { ...a, category: resolvedCat } as typeof a;
     if (item.kind !== "point") return fail(`${item.label} is not a point item — use place_elements for ${item.kind} items.`, { affected: 0 });
     if (ctx.discipline && ctx.discipline !== "all" && item.discipline !== ctx.discipline) {
       return fail(`${a.category} is ${item.discipline}; you are acting as ${ctx.discipline}.`, { affected: 0 });

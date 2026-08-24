@@ -176,6 +176,97 @@ export const CATALOG: Record<string, CatalogItem> = Object.fromEntries([
   it("fire_pump", "fire", "point", "Fire pump", 0x991b1b, { width: 1.5, depth: 1, height: 1.2 }),
 ]);
 
+/**
+ * Resolve whatever the caller called a category into a catalog key.
+ *
+ * A model asked to draw a floor plate reaches for the vocabulary it knows, and
+ * what it knows is Revit. It sent `OST_Walls` — Revit's internal category enum —
+ * and `Generic - 200mm`, which is not a category at all but a wall TYPE. Both
+ * were rejected with "Use one from the catalog", which does not say what is in
+ * the catalog, so the model could only guess again. It spent its budget guessing.
+ *
+ * Accepting the dialects costs nothing:
+ *
+ *   OST_Walls · Walls · wall · WALL      → wall
+ *   OST_StructuralColumns · Columns      → column
+ *   Interior Wall · interior-wall        → interior_wall
+ *
+ * A type name still cannot be resolved — nothing about "Generic - 200mm" says
+ * wall — and that is what `suggestCategories` is for: the rejection names the
+ * closest real categories so the next attempt can be right.
+ */
+const CATEGORY_ALIASES: Record<string, string> = {
+  // Revit built-in category enums, which a model trained on Revit reaches for.
+  ost_walls: "wall", ost_doors: "door", ost_windows: "window",
+  ost_floors: "floor", ost_roofs: "roof", ost_ceilings: "ceiling",
+  ost_rooms: "room", ost_stairs: "stair", ost_railing: "railing",
+  ost_structuralcolumns: "column", ost_columns: "column",
+  ost_structuralframing: "beam", ost_beams: "beam",
+  ost_structuralfoundation: "footing", ost_furniture: "furniture",
+  ost_curtainwallpanels: "curtain_wall", ost_curtainwall: "curtain_wall",
+  ost_lightingfixtures: "light", ost_electricalfixtures: "socket",
+  ost_ducts: "duct", ost_pipes: "pipe", ost_cabletray: "cable_tray",
+  ost_plumbingfixtures: "basin", ost_sprinklers: "sprinkler",
+  ost_grids: "grid", ost_levels: "level",
+  // Words people and models use for the same thing.
+  partition: "interior_wall", "interior wall": "interior_wall",
+  internal_wall: "interior_wall", slab: "floor", structural_column: "column",
+  curtainwall: "curtain_wall", "curtain wall": "curtain_wall",
+  glazing: "curtain_wall", opening: "door", doorway: "door",
+};
+
+/** Lowercase, strip punctuation, drop a trailing plural. */
+function normaliseCategory(raw: string): string {
+  const s = String(raw ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  // "walls" → "wall", but never "glass" → "glas".
+  return s.endsWith("s") && !s.endsWith("ss") ? s.slice(0, -1) : s;
+}
+
+export function resolveCategory(raw: string): string | null {
+  const asGiven = String(raw ?? "").trim();
+  if (CATALOG[asGiven]) return asGiven;
+
+  const lower = asGiven.toLowerCase();
+  if (CATEGORY_ALIASES[lower]) return CATEGORY_ALIASES[lower];
+  if (CATALOG[lower]) return lower;
+
+  const n = normaliseCategory(asGiven);
+  if (CATALOG[n]) return n;
+  if (CATEGORY_ALIASES[n]) return CATEGORY_ALIASES[n];
+
+  // OST_Walls with the prefix stripped, in case a new one appears.
+  if (n.startsWith("ost_")) {
+    const bare = normaliseCategory(n.slice(4));
+    if (CATALOG[bare]) return bare;
+    if (CATEGORY_ALIASES[bare]) return CATEGORY_ALIASES[bare];
+  }
+  return null;
+}
+
+/**
+ * The catalog entries closest to what was asked for.
+ *
+ * Substring match first — "structural_wall" should offer shear_wall and
+ * retaining_wall — then a cheap character-overlap score. Not clever, and it does
+ * not need to be: it exists so a rejection carries a next step instead of only a
+ * complaint.
+ */
+export function suggestCategories(raw: string, limit = 6): string[] {
+  const n = normaliseCategory(raw);
+  const keys = Object.keys(CATALOG);
+  if (!n) return keys.slice(0, limit);
+
+  const contains = keys.filter((k) => k.includes(n) || n.includes(k));
+  if (contains.length) return contains.slice(0, limit);
+
+  const chars = new Set(n.split(""));
+  return keys
+    .map((k) => ({ k, score: [...new Set(k.split(""))].filter((c) => chars.has(c)).length / Math.max(k.length, n.length) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((x) => x.k);
+}
+
 export const DISCIPLINES: { id: Discipline; label: string }[] = [
   { id: "architectural", label: "Architecture" },
   { id: "structural", label: "Structural" },

@@ -15,7 +15,7 @@
 import { describe, it, expect } from "vitest";
 import { coerceArgs } from "@/lib/bim/registry";
 import { BUILTIN_TOOLS } from "@/lib/bim/tools";
-import { emptyDocument } from "@/lib/bim/model";
+import { emptyDocument, resolveCategory, suggestCategories } from "@/lib/bim/model";
 
 const place = BUILTIN_TOOLS.find((t) => t.name === "place_elements")!;
 const ctx = { doc: emptyDocument(), userId: "u1", discipline: "all" } as any;
@@ -114,5 +114,60 @@ describe("a placement must carry its geometry", () => {
     const r = place.run(ctx, { category: "wall", placements: wall(0, 0, 5000, 0) } as any);
     expect(r.ok).toBe(true);
     expect(r.affected).toBe(1);
+  });
+});
+
+describe("the vocabulary a model actually brings", () => {
+  it("accepts Revit built-in category enums", () => {
+    /* The second failure, after the parameter name was fixed: the model sent
+       OST_Walls, which is Revit's internal category enum. It knows Revit; the
+       catalog speaks Preckon. Accepting the dialect costs nothing. */
+    expect(resolveCategory("OST_Walls")).toBe("wall");
+    expect(resolveCategory("OST_Doors")).toBe("door");
+    expect(resolveCategory("OST_StructuralColumns")).toBe("column");
+    expect(resolveCategory("OST_StructuralFraming")).toBe("beam");
+  });
+
+  it("accepts plurals, spacing and case", () => {
+    expect(resolveCategory("Walls")).toBe("wall");
+    expect(resolveCategory("WALL")).toBe("wall");
+    expect(resolveCategory("Curtain Wall")).toBe("curtain_wall");
+    expect(resolveCategory("interior-wall")).toBe("interior_wall");
+  });
+
+  it("does not strip a double-s ending", () => {
+    // "glass" must not become "glas".
+    expect(resolveCategory("glass")).toBeNull();
+  });
+
+  it("maps the words people use", () => {
+    expect(resolveCategory("partition")).toBe("interior_wall");
+    expect(resolveCategory("slab")).toBe("floor");
+  });
+
+  it("still refuses a type name, because nothing about it says wall", () => {
+    expect(resolveCategory("Generic - 200mm")).toBeNull();
+  });
+
+  it("names real categories when it refuses", () => {
+    /* The whole problem: "Use one from the catalog" does not say what is in the
+       catalog, so a model that guessed wrong can only guess again. */
+    const r = place.run(ctx, { category: "Generic - 200mm", placements: [wall(0, 0, 1000, 0)] } as any);
+    expect(r.ok).toBe(false);
+    expect(r.summary).toMatch(/did you mean|category \(e\.g\. "wall"\)/i);
+  });
+
+  it("suggests wall-ish categories for a wall-ish word", () => {
+    const s = suggestCategories("structural_wall");
+    expect(s.some((k) => k.includes("wall"))).toBe(true);
+  });
+
+  it("places successfully once the dialect is resolved", () => {
+    const r = place.run(ctx, {
+      category: "OST_Walls",
+      placements: [wall(0, 0, 24000, 0), wall(24000, 0, 24000, 10000)],
+    } as any);
+    expect(r.ok).toBe(true);
+    expect(r.affected).toBe(2);
   });
 });
