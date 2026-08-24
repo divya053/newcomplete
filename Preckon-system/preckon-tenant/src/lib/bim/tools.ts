@@ -255,7 +255,7 @@ const placeElements: Tool = {
   keywords: ["place", "add", "create", "draw", "insert", "wall", "column", "beam", "door", "new"],
   params: [
     { name: "category", type: "string", description: "Catalog category, e.g. wall, column, beam, door", required: true },
-    { name: "placements", type: "selector", description: "Array of placement objects, each {start,end} | {at} | {outline} | {host,offset}, optionally with name/level/params", required: true },
+    { name: "placements", type: "object[]", description: "Array of placement objects — place the whole set in ONE call. Each is {start,end} for linear | {at} for point | {outline} for area | {host,offset} for hosted, optionally with name/level/params", required: true },
   ],
   run: (ctx, a) => {
     const item = CATALOG[a.category];
@@ -506,7 +506,7 @@ const placeAtPoints: Tool = {
   keywords: ["place", "column", "grid", "each", "every", "intersection", "array", "repeat", "footing"],
   params: [
     { name: "category", type: "string", description: "Catalog category, e.g. column", required: true },
-    { name: "points", type: "selector", description: "Array of {x,y}", required: true },
+    { name: "points", type: "object[]", description: "Array of {x,y} — pass every point in ONE call", required: true },
     {
       name: "offsets",
       type: "string[]",

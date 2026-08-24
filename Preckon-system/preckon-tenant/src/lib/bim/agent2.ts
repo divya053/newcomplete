@@ -252,6 +252,14 @@ export async function runBimAgent2<Doc = BimDocument, Cmd = Command>({
 
       const { args, errors } = coerceArgs(tool, (toolUse.input?.args ?? {}) as Record<string, any>);
       if (errors.length) {
+        // Recorded, not just whispered back to the model. A rejected call used
+        // to leave no mark at all, so a run that spent its steps failing
+        // validation looked — in the trace the user reads — like a run that
+        // simply chose to place one element.
+        trace.push({
+          tool: tool.name, label: tool.label, module: tool.module, scope: tool.scope,
+          kind: tool.kind, ok: false, summary: `Rejected: ${errors.join("; ")}`,
+        });
         say(`Cannot run ${tool.label}: ${errors.join("; ")}`);
         continue;
       }

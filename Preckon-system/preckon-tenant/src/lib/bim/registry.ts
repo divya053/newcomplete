@@ -22,7 +22,7 @@ import type { BimDocument, Discipline, Element } from "./model";
 export type ToolScope = "global" | "personal";
 export type ToolKind = "read" | "write";
 
-export type ParamType = "string" | "number" | "boolean" | "selector" | "vec2" | "enum" | "string[]";
+export type ParamType = "string" | "number" | "boolean" | "selector" | "vec2" | "enum" | "string[]" | "object[]";
 
 export interface ToolParam {
   name: string;
@@ -260,6 +260,24 @@ export function coerceArgs(tool: Tool<any, any>, raw: Record<string, any> = {}):
         if (typeof v !== "object" || Array.isArray(v)) errors.push(`"${p.name}" must be a selector object`);
         else args[p.name] = v;
         break;
+      case "object[]": {
+        /* A genuine list parameter — a set of placements, a set of points.
+           This used to be declared "selector", which rejects arrays outright,
+           so every attempt to place more than one element at a time bounced
+           and the assistant fell back to placing one. Be generous about the
+           shape: a lone object means a list of one, and a model that hands
+           back a JSON string still means the array inside it. */
+        let items: unknown = v;
+        if (typeof items === "string") {
+          try { items = JSON.parse(items); } catch { /* reported below */ }
+        }
+        const list: unknown[] = Array.isArray(items) ? items : [items];
+        const bad = list.findIndex((o) => typeof o !== "object" || o === null || Array.isArray(o));
+        if (!list.length) errors.push(`"${p.name}" must be a non-empty array of objects`);
+        else if (bad >= 0) errors.push(`"${p.name}"[${bad}] must be an object, got ${JSON.stringify(list[bad])}`);
+        else args[p.name] = list;
+        break;
+      }
     }
   }
 
