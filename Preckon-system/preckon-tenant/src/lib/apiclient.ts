@@ -6,9 +6,43 @@
 
 const BASE = "/api/v1";
 
+/**
+ * Turn whatever arrived into something a person can read.
+ *
+ * `super(message)` coerces with String(), so an object message becomes the
+ * literal text "[object Object]" — which is then what the user sees in the
+ * assistant panel, on a screen where the actual failure is invisible. That is
+ * not hypothetical: it is what BIM Studio displayed instead of an error.
+ *
+ * Anything that is not already a string is unwrapped where a message is likely
+ * to be hiding, and otherwise serialised — a JSON blob is ugly, but it says
+ * something, and "[object Object]" says nothing at all.
+ */
+export function readableMessage(v: unknown, fallback: string): string {
+  if (typeof v === "string" && v.trim()) return v.trim();
+  if (v == null) return fallback;
+  if (Array.isArray(v)) {
+    const joined = v.map((x) => readableMessage(x, "")).filter(Boolean).join("; ");
+    return joined || fallback;
+  }
+  if (typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    for (const k of ["message", "detail", "error", "reason", "summary", "text"]) {
+      const got = readableMessage(o[k], "");
+      if (got) return got;
+    }
+    try {
+      const s = JSON.stringify(v);
+      if (s && s !== "{}") return s.length > 400 ? `${s.slice(0, 400)}…` : s;
+    } catch { /* circular — fall through */ }
+    return fallback;
+  }
+  return String(v);
+}
+
 export class ApiClientError extends Error {
-  constructor(public code: string, message: string, public status: number, public details?: any) {
-    super(message);
+  constructor(public code: string, message: unknown, public status: number, public details?: any) {
+    super(readableMessage(message, "Request failed"));
     this.name = "ApiClientError";
   }
 }

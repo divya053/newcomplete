@@ -32,6 +32,21 @@ export interface ToolParam {
   default?: unknown;
   /** For type "enum". */
   options?: string[];
+  /**
+   * Other names a model plausibly reaches for.
+   *
+   * A model asked to draw a floor plate called the placement array `lines`
+   * rather than `placements`. The parameter was then missing, the list became
+   * `[undefined]`, and the tool cheerfully reported "Placing 1 wall(s)" —
+   * a wall with no geometry. It then deleted it, tried again, and burned its
+   * whole step budget probing the schema while the user watched one grey bar
+   * appear and disappear.
+   *
+   * Accepting the near-miss costs nothing and turns a silent, confusing
+   * degradation into the thing the user asked for. The canonical name is still
+   * what the schema advertises.
+   */
+  aliases?: string[];
 }
 
 /**
@@ -220,9 +235,26 @@ export function coerceArgs(tool: Tool<any, any>, raw: Record<string, any> = {}):
   for (const p of tool.params) {
     let v = raw[p.name];
 
+    // A near-miss name is worth accepting. See ToolParam.aliases.
+    if (v === undefined || v === null || v === "") {
+      for (const alt of p.aliases ?? []) {
+        const got = raw[alt];
+        if (got !== undefined && got !== null && got !== "") { v = got; break; }
+      }
+    }
+
     if (v === undefined || v === null || v === "") {
       if (p.default !== undefined) v = p.default;
-      else if (p.required) errors.push(`missing required parameter "${p.name}" (${p.type})`);
+      else if (p.required) {
+        // Name what WAS sent. A model that used the wrong key can only correct
+        // itself if the rejection says which key it should have used, and
+        // listing what it actually passed is what makes that obvious.
+        const sent = Object.keys(raw).filter((k) => !tool.params.some((q) => q.name === k));
+        errors.push(
+          `missing required parameter "${p.name}" (${p.type})` +
+          (sent.length ? ` — you sent ${sent.map((k) => `"${k}"`).join(", ")}; use "${p.name}"` : ""),
+        );
+      }
       if (v === undefined || v === null || v === "") continue;
     }
 

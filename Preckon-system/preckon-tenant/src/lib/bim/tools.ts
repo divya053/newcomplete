@@ -255,13 +255,52 @@ const placeElements: Tool = {
   keywords: ["place", "add", "create", "draw", "insert", "wall", "column", "beam", "door", "new"],
   params: [
     { name: "category", type: "string", description: "Catalog category, e.g. wall, column, beam, door", required: true },
-    { name: "placements", type: "object[]", description: "Array of placement objects — place the whole set in ONE call. Each is {start,end} for linear | {at} for point | {outline} for area | {host,offset} for hosted, optionally with name/level/params", required: true },
+    {
+      name: "placements", type: "object[]", required: true,
+      aliases: ["lines", "elements", "items", "segments", "walls", "positions", "placement", "geometry"],
+      description: "Array of placement objects — place the whole set in ONE call. Each is {start:{x,y},end:{x,y}} for linear | {at:{x,y}} for point | {outline:[{x,y},…]} for area | {host,offset} for hosted, optionally with name/level/params. Coordinates are millimetres.",
+    },
   ],
   run: (ctx, a) => {
     const item = CATALOG[a.category];
     if (!item) return fail(`Unknown category "${a.category}". Use one from the catalog.`, { affected: 0 });
     const list = Array.isArray(a.placements) ? a.placements : [a.placements];
     if (!list.length) return fail("No placements given.", { affected: 0 });
+
+    /* Every placement must carry the geometry its kind needs.
+       Without this a placement of {} is accepted and becomes an element with no
+       extent — which draws as a stray bar, measures as nothing, and gives the
+       model no signal that anything went wrong. It then retries, deletes, and
+       retries again. Refusing here, with the shape spelled out, is what lets it
+       correct itself on the next turn instead of exhausting its steps. */
+    const need: Record<string, string> = {
+      linear: "start:{x,y} and end:{x,y}",
+      point: "at:{x,y}",
+      area: "outline:[{x,y},…] with at least 3 points",
+      hosted: "host and offset",
+    };
+    const vec = (o: unknown) =>
+      !!o && typeof o === "object" &&
+      Number.isFinite(Number((o as any).x)) && Number.isFinite(Number((o as any).y));
+
+    const bad = list.findIndex((p: any) => {
+      if (!p || typeof p !== "object") return true;
+      switch (item.kind) {
+        case "linear": return !vec(p.start) || !vec(p.end);
+        case "point": return !vec(p.at);
+        case "area": return !Array.isArray(p.outline) || p.outline.length < 3 || !p.outline.every(vec);
+        case "hosted": return p.host === undefined || p.host === null;
+        default: return false;
+      }
+    });
+    if (bad >= 0) {
+      return fail(
+        `placements[${bad}] is missing the geometry a ${item.label.toLowerCase()} needs. ` +
+        `A ${item.kind} item requires ${need[item.kind] ?? "geometry"}. ` +
+        `Got ${JSON.stringify(list[bad])}.`,
+        { affected: 0 },
+      );
+    }
     if (ctx.discipline && ctx.discipline !== "all" && item.discipline !== ctx.discipline) {
       return fail(`${a.category} is ${item.discipline}; you are acting as ${ctx.discipline}.`, { affected: 0 });
     }
