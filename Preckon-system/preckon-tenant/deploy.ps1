@@ -314,6 +314,30 @@ $tmp = Join-Path $env:TEMP "preckon-remote-deploy.sh"
 Write-Host "==> Sending the deploy script" -ForegroundColor Cyan
 Send-Bundle -Local $tmp -Remote "/tmp/preckon-remote-deploy.sh" -Size (Get-Item $tmp).Length
 
+# ── The bundle was verified. Is it still there? ──────────────────────────────
+#
+# A deploy failed with "stat: cannot statx '/tmp/preckon-tenant.tgz'" roughly a
+# minute after Send-Bundle had confirmed that exact file, by size and by
+# SHA-256. Something removed it between the verification and its use, and the
+# cause was not established: disk was at 14%, systemd-tmpfiles last ran hours
+# earlier, and nothing in this script deletes that path once it is verified.
+#
+# Rather than reason about it further, the invariant is simply restated at the
+# moment it matters. This costs one stat and one hash against a file that is
+# almost always fine, and it turns a class of failure nobody understands into a
+# retry nobody has to think about.
+$ok = $false
+for ($i = 1; $i -le 3 -and -not $ok; $i++) {
+  $landedNow = Get-RemoteSize "/tmp/preckon-tenant.tgz"
+  if ($landedNow -eq $size -and (Get-RemoteSha "/tmp/preckon-tenant.tgz") -eq $BundleSha) { $ok = $true; break }
+
+  Write-Host ("    bundle is no longer on the server as verified ({0:N0} of {1:N0} bytes) - resending (attempt {2})" -f `
+              $landedNow, $size, $i) -ForegroundColor DarkYellow
+  Invoke-Native { & ssh @SshOpts $Server "rm -f /tmp/preckon-tenant.tgz" } | Out-Null
+  Send-Bundle -Local $Bundle -Remote "/tmp/preckon-tenant.tgz" -Size $size
+}
+if (-not $ok) { throw "the bundle will not stay on the server long enough to unpack - investigate /tmp on $($env:PRECKON_HOST)" }
+
 Write-Host "==> Deploying" -ForegroundColor Cyan
 Invoke-Native { & ssh @SshOpts $Server "bash /tmp/preckon-remote-deploy.sh" }
 if ($LASTEXITCODE -ne 0) { throw "remote deploy failed" }
