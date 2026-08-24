@@ -386,6 +386,18 @@
 :root{ --font-mono:'IBM Plex Sans Arabic','JetBrains Mono',ui-monospace,monospace; }
 /* ...but genuine code chips stay monospaced. */
 .c1,.code,.mono,.rid,.sc,.seq,.dn,.nm,.mod-name,.mod .name,.pk,.mut,.file,.cov-label,.fn,.ava{ font-family:'JetBrains Mono',ui-monospace,monospace; }
+
+  /* 90-second overview — video modal */
+  .vmodal{border:0; padding:0; background:transparent; width:100%; max-width:min(1080px,92vw); overflow:visible;}
+  .vmodal::backdrop{background:rgba(6,16,28,.86);}
+  .vmodal-shell{position:relative;}
+  .vmodal video{display:block; width:100%; height:auto; max-height:82vh; border-radius:14px;
+    background:#000; box-shadow:0 24px 70px rgba(6,16,28,.45);}
+  .vmodal-close{position:absolute; top:-15px; right:-15px; width:38px; height:38px; border-radius:50%;
+    border:1px solid var(--hairline); background:var(--surface); color:var(--ink); font-size:19px;
+    line-height:1; cursor:pointer; display:grid; place-items:center;}
+  .vmodal-close:hover{background:var(--teal); border-color:var(--teal);}
+  @media (max-width:700px){ .vmodal-close{top:10px; right:10px;} }
 </style>
 <style>
 /* ============================================================
@@ -490,7 +502,7 @@ h1,h2,h3,h4,h5,h6,.h2,.hero h1,.wedge,.finalcta h3,.dp h3{ line-height:1.35 !imp
 <div class="hero-cta">
 <a class="btn btn-primary" href="/ar/demo">احجز عرضًا توضيحيًا
           <svg fill="none" height="16" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="16"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a>
-<a class="btn btn-secondary" href="#how">شاهد نظرة عامة في 90 ثانية</a>
+<a class="btn btn-secondary" href="/brand/preckon-video.mp4" data-video>شاهد نظرة عامة في 90 ثانية</a>
 </div>
 <div class="proof"><span class="d"></span> مبني بالتعاون مع مُقدِّري تكاليف ومسّاحي كميات ممارسين — لا مجرد عرض تجريبي.</div>
 </div>
@@ -875,7 +887,7 @@ h1,h2,h3,h4,h5,h6,.h2,.hero h1,.wedge,.finalcta h3,.dp h3{ line-height:1.35 !imp
 </div>
 <div class="col"><h6>المنصة</h6><a href="/ar/platform">نظرة عامة</a><a href="/ar/modules">الوحدات</a><a href="#how">كيف يعمل</a><a href="#industries">القطاعات</a><a href="/ar/security">الأمان</a></div>
 <div class="col"><h6>الشركة</h6><a href="/ar/about">عن Preckon</a><a href="/ar/pricing">الأسعار</a><a href="#partners">شركاء التصميم</a><a href="#faq">الأسئلة الشائعة</a><a href="/ar/demo">تواصل معنا</a></div>
-<div class="col"><h6>ابدأ الآن</h6><a href="/ar/demo">احجز عرضًا توضيحيًا</a><a href="/ar/pricing">برنامج شركاء التصميم</a><a href="#how">شاهد النظرة العامة</a></div>
+<div class="col"><h6>ابدأ الآن</h6><a href="/ar/demo">احجز عرضًا توضيحيًا</a><a href="/ar/pricing">برنامج شركاء التصميم</a><a href="/brand/preckon-video.mp4" data-video>شاهد النظرة العامة</a></div>
 </div>
 <div class="base">
 <span class="k">© 2026 TechSME Inc. · ميسيسوجا، أونتاريو</span>
@@ -934,4 +946,32 @@ h1,h2,h3,h4,h5,h6,.h2,.hero h1,.wedge,.finalcta h3,.dp h3{ line-height:1.35 !imp
   window.PK={toggleTheme:function(){theme(root.getAttribute("data-theme")==="dark"?"light":"dark");}};
 })();
 </script>
+
+<!-- 90-second overview -->
+<dialog class="vmodal" id="pk-video-modal" aria-label="Preckon — 90-second overview">
+  <div class="vmodal-shell">
+    <button class="vmodal-close" type="button" data-video-close aria-label="Close video">&#215;</button>
+    <video id="pk-video" controls playsinline preload="none" poster="/og-image.png" src="/brand/preckon-video.mp4"></video>
+  </div>
+</dialog>
+<script>
+(function(){
+  var m=document.getElementById('pk-video-modal'), v=document.getElementById('pk-video');
+  if(!m||!v){return;}
+  function open(e){
+    if(e){e.preventDefault();}
+    if(typeof m.showModal==='function'){m.showModal();}else{m.setAttribute('open','');}
+    var p=v.play(); if(p&&p.catch){p.catch(function(){});}
+  }
+  function close(){
+    v.pause();
+    if(typeof m.close==='function'&&m.open){m.close();}else{m.removeAttribute('open');}
+  }
+  [].forEach.call(document.querySelectorAll('[data-video]'),function(a){a.addEventListener('click',open);});
+  [].forEach.call(m.querySelectorAll('[data-video-close]'),function(b){b.addEventListener('click',close);});
+  m.addEventListener('click',function(e){ if(e.target===m){close();} });   /* click the backdrop */
+  m.addEventListener('close',function(){ v.pause(); });                    /* Esc */
+})();
+</script>
+
 </html>

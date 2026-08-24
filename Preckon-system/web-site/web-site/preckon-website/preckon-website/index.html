@@ -361,6 +361,18 @@
   [data-theme="dark"] .theme-toggle .ic-moon{display:none;}
   [data-theme="dark"] .theme-toggle .ic-sun{display:block;}
   [dir="rtl"] .eyebrow::before{margin-left:0;}
+
+  /* 90-second overview — video modal */
+  .vmodal{border:0; padding:0; background:transparent; width:100%; max-width:min(1080px,92vw); overflow:visible;}
+  .vmodal::backdrop{background:rgba(6,16,28,.86);}
+  .vmodal-shell{position:relative;}
+  .vmodal video{display:block; width:100%; height:auto; max-height:82vh; border-radius:14px;
+    background:#000; box-shadow:0 24px 70px rgba(6,16,28,.45);}
+  .vmodal-close{position:absolute; top:-15px; right:-15px; width:38px; height:38px; border-radius:50%;
+    border:1px solid var(--hairline); background:var(--surface); color:var(--ink); font-size:19px;
+    line-height:1; cursor:pointer; display:grid; place-items:center;}
+  .vmodal-close:hover{background:var(--teal); border-color:var(--teal);}
+  @media (max-width:700px){ .vmodal-close{top:10px; right:10px;} }
 </style>
 
 <script>
@@ -404,7 +416,7 @@
       <div class="hero-cta">
         <a class="btn btn-primary" href="preckon-demo.html">Book a demo
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
-        <a class="btn btn-secondary" href="#how">Watch the 90-second overview</a>
+        <a class="btn btn-secondary" href="brand/preckon-video.mp4" data-video>Watch the 90-second overview</a>
       </div>
       <div class="proof"><span class="d"></span> Built with practicing estimators and quantity surveyors — not a demo reel.</div>
     </div>
@@ -886,5 +898,32 @@
   }
   window.PK={toggleTheme:function(){theme(root.getAttribute("data-theme")==="dark"?"light":"dark");},setLang:lang};
   var sl=rd("preckon-lang");if(sl)lang(sl);
+})();
+</script>
+
+<!-- 90-second overview -->
+<dialog class="vmodal" id="pk-video-modal" aria-label="Preckon — 90-second overview">
+  <div class="vmodal-shell">
+    <button class="vmodal-close" type="button" data-video-close aria-label="Close video">&#215;</button>
+    <video id="pk-video" controls playsinline preload="none" src="brand/preckon-video.mp4"></video>
+  </div>
+</dialog>
+<script>
+(function(){
+  var m=document.getElementById('pk-video-modal'), v=document.getElementById('pk-video');
+  if(!m||!v){return;}
+  function open(e){
+    if(e){e.preventDefault();}
+    if(typeof m.showModal==='function'){m.showModal();}else{m.setAttribute('open','');}
+    var p=v.play(); if(p&&p.catch){p.catch(function(){});}
+  }
+  function close(){
+    v.pause();
+    if(typeof m.close==='function'&&m.open){m.close();}else{m.removeAttribute('open');}
+  }
+  [].forEach.call(document.querySelectorAll('[data-video]'),function(a){a.addEventListener('click',open);});
+  [].forEach.call(m.querySelectorAll('[data-video-close]'),function(b){b.addEventListener('click',close);});
+  m.addEventListener('click',function(e){ if(e.target===m){close();} });   /* click the backdrop */
+  m.addEventListener('close',function(){ v.pause(); });                    /* Esc */
 })();
 </script>
