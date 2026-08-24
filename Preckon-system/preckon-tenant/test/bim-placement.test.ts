@@ -171,3 +171,22 @@ describe("the vocabulary a model actually brings", () => {
     expect(r.affected).toBe(2);
   });
 });
+
+describe("an empty array is a question, not a typo", () => {
+  it("answers with a worked example rather than the parameter name", () => {
+    /* An empty array is the model saying "I know the parameter but not what
+       goes in it". Repeating the name teaches it nothing it did not already
+       know, and every wasted rejection costs a step. */
+    const { errors } = coerceArgs(place, { category: "wall", placements: [] });
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatch(/start/);
+    expect(errors[0]).toMatch(/24000/);
+    expect(errors[0]).toMatch(/millimetres/i);
+  });
+
+  it("resolves the capitalised and plural forms the model actually sent", () => {
+    // Straight from the failing trace: "Walls" and "Wall".
+    expect(resolveCategory("Walls")).toBe("wall");
+    expect(resolveCategory("Wall")).toBe("wall");
+  });
+});

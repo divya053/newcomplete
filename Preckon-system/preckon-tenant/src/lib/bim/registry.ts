@@ -305,9 +305,21 @@ export function coerceArgs(tool: Tool<any, any>, raw: Record<string, any> = {}):
         }
         const list: unknown[] = Array.isArray(items) ? items : [items];
         const bad = list.findIndex((o) => typeof o !== "object" || o === null || Array.isArray(o));
-        if (!list.length) errors.push(`"${p.name}" must be a non-empty array of objects`);
-        else if (bad >= 0) errors.push(`"${p.name}"[${bad}] must be an object, got ${JSON.stringify(list[bad])}`);
-        else args[p.name] = list;
+
+        /* An empty array is the model saying "I know the parameter but not what
+           goes in it". Answering with the parameter name again teaches it
+           nothing — it already knew that much — so the rejection carries a
+           worked example instead. Every rejection in this loop costs a step,
+           and a step that ends where it began is how a run exhausts itself
+           without drawing anything. */
+        if (!list.length) {
+          errors.push(
+            `"${p.name}" is empty. It needs at least one object — for walls, ` +
+            `[{"start":{"x":0,"y":0},"end":{"x":24000,"y":0}}]. Coordinates are millimetres.`,
+          );
+        } else if (bad >= 0) {
+          errors.push(`"${p.name}"[${bad}] must be an object, got ${JSON.stringify(list[bad])}`);
+        } else args[p.name] = list;
         break;
       }
     }
