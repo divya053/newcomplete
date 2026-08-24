@@ -73,6 +73,11 @@ const server = http.createServer(async (req, res) => {
           system: body.system,
           messages: body.messages ?? [],
           ...(body.tools ? { tools: body.tools } : {}),
+          // Forwarded, not dropped. This proxy builds the upstream body key by
+          // key, so anything not named here is silently discarded — which is how
+          // the assistant ended up running with thinking off.
+          ...(body.thinking ? { thinking: body.thinking } : {}),
+          ...(body.output_config ? { output_config: body.output_config } : {}),
         }),
       });
       const text = await upstream.text();

@@ -144,7 +144,12 @@ export interface BimAgent2Args<Doc = BimDocument, Cmd = Command> {
   /** Apply commands to the real document; returns the new doc and how many landed. */
   apply: (cmds: Cmd[]) => Promise<{ doc: Doc; applied: number }>;
   model: string;
-  callAnthropic: (req: { model: string; system: string; messages: any[]; tools: any[]; maxTokens: number }) => Promise<any>;
+  callAnthropic: (req: {
+    model: string; system: string; messages: any[]; tools: any[]; maxTokens: number;
+    /** Adaptive thinking. Opus 4.8 runs without it unless it is asked for. */
+    thinking?: { type: "adaptive" };
+    output_config?: Record<string, unknown>;
+  }) => Promise<any>;
   /** Skip the confirmation gate — the user already approved this action. */
   preapproved?: boolean;
   confirmThreshold?: number;
@@ -190,7 +195,18 @@ export async function runBimAgent2<Doc = BimDocument, Cmd = Command>({
   let working = doc;
 
   for (let step = 0; step < MAX_STEPS; step++) {
-    const res = await callAnthropic({ model, system, messages, tools: [DISCOVER_TOOL, RUN_TOOL, ASK_TOOL], maxTokens: 3000 });
+    const res = await callAnthropic({
+      model, system, messages,
+      tools: [DISCOVER_TOOL, RUN_TOOL, ASK_TOOL],
+      // Opus 4.8 runs WITHOUT thinking unless adaptive is asked for by name.
+      // This loop plans a floor plate over up to 16 tool calls, which is
+      // exactly the work that collapses without it: the model would place one
+      // wall and declare itself done.
+      thinking: { type: "adaptive" },
+      // Thinking tokens count against max_tokens, so 3000 no longer buys a
+      // full turn plus its tool call.
+      maxTokens: 8000,
+    });
     const toolUse = (res.content ?? []).find((c: any) => c.type === "tool_use");
     const text = (res.content ?? []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("").trim();
 
@@ -206,12 +222,12 @@ export async function runBimAgent2<Doc = BimDocument, Cmd = Command>({
 
     // ── ask_user ────────────────────────────────────────────────────────────
     if (toolUse.name === "ask_user") {
-      return { status: "needs_input", reply: String(toolUse.input?.question ?? "Could you clarify?"), trace };
+      return { status: "needs_input", reply: asText(toolUse.input?.question) || "Could you clarify?", trace };
     }
 
     // ── discover_tools ──────────────────────────────────────────────────────
     if (toolUse.name === "discover_tools") {
-      const found = registry.search(String(toolUse.input?.task ?? instruction), { userId, discipline });
+      const found = registry.search(asText(toolUse.input?.task) || instruction, { userId, discipline });
       say(
         found.length
           ? `Found ${found.length} tool(s):\n\n${registry.describe(found)}`
@@ -222,7 +238,7 @@ export async function runBimAgent2<Doc = BimDocument, Cmd = Command>({
 
     // ── run_tool ────────────────────────────────────────────────────────────
     if (toolUse.name === "run_tool") {
-      const name = String(toolUse.input?.tool ?? "");
+      const name = asText(toolUse.input?.tool);
       const tool = registry.get(name, userId);
 
       if (!tool) {
@@ -263,7 +279,8 @@ export async function runBimAgent2<Doc = BimDocument, Cmd = Command>({
         affected: result.affected,
       });
       if (result.assumptions?.length) assumptions.push(...result.assumptions);
-      if (toolUse.input?.reply) reply = String(toolUse.input.reply);
+      const said = asText(toolUse.input?.reply);
+      if (said) reply = said;
 
       // The gate. Count first, then ask — the recording's "This is a large
       // action. Shall I proceed to place 216 W10X49 columns?" moment.
@@ -315,6 +332,26 @@ export async function runBimAgent2<Doc = BimDocument, Cmd = Command>({
     assumptions,
     trace,
   };
+}
+
+
+/* Tool inputs are model-authored. The schema says `reply` is a string, but a
+   model can still hand back an object, and String({}) is "[object Object]" —
+   which is exactly what the person asking ends up reading. Pull a real string
+   out of whatever arrived, or treat it as absent. */
+function asText(v: unknown): string {
+  if (typeof v === "string") return v.trim();
+  if (v == null) return "";
+  if (Array.isArray(v)) return v.map(asText).filter(Boolean).join(" ").trim();
+  if (typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    for (const k of ["text", "reply", "message", "summary", "content", "question"]) {
+      const got = asText(o[k]);
+      if (got) return got;
+    }
+    return "";
+  }
+  return String(v);
 }
 
 /** A specialist may only run tools that act for its discipline. */
