@@ -26,13 +26,39 @@ async function open(page: Page) {
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/overview/);
 
+  /* Pick a project that actually HAS a programme, rather than whichever sorts
+     first.
+
+     The schedule surface renders StageEmpty when the stage has no activity rows
+     (schedule.tsx), so .prog-wrap only exists for a project whose schedulelogix
+     stage produced output. "The first row" is not that project reliably:
+     core-loop.spec.ts starts a run before this file executes, which can float a
+     freshly-touched project — tender artifacts, no programme — to the top. It
+     passed locally only because every project here carries schedule rows from
+     months of earlier runs; on a fresh CI database it does not.
+
+     So ask the API which project has one, in the browser session so the auth
+     cookie and tenant scope are the real ones. */
   let pid = PID_OVERRIDE;
   if (!pid) {
-    await page.getByRole("link", { name: "Projects", exact: true }).click();
-    await page.locator("tbody tr").first().click();
-    await expect(page).toHaveURL(/\/projects\/[0-9a-f-]{8,}/);
-    pid = page.url().match(/\/projects\/([0-9a-f-]{8,})/)?.[1];
-    expect(pid, "could not read a project id from the URL").toBeTruthy();
+    pid = await page.evaluate(async () => {
+      const get = async (u: string) => {
+        const r = await fetch(u);
+        return r.ok ? r.json() : null;
+      };
+      const projects = (await get("/api/v1/projects")) ?? [];
+      for (const p of projects) {
+        const res = await get(`/api/v1/projects/${p.id}/artifacts`);
+        const items: any[] = res?.artifacts ?? res ?? [];
+        if (items.some((a) => String(a.type_key ?? "").includes("schedule_activity"))) return p.id;
+      }
+      return "";
+    });
+    expect(
+      pid,
+      "no project has any schedule_activity artifact, so no programme grid can render. " +
+        "The seed runs autopilot on two projects; if that did not happen, fix the seed rather than this test.",
+    ).toBeTruthy();
   }
 
   await page.goto(`/projects/${pid}/modules/schedulelogix`);
