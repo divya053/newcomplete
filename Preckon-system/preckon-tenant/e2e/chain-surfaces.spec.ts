@@ -31,8 +31,17 @@ async function openAdvancedProject(page: Page) {
   await expect(page.getByRole("heading", { name: "Chain progress" })).toBeVisible();
 }
 
+/* Each marker accepts the populated surface OR that stage's own empty state.
+   Both prove the purpose-built surface rendered rather than the generic
+   fallback, which is what this test is actually asserting.
+
+   Tender was the one stage without its empty-state alternative, so it alone
+   depended on the chosen project having requirements. openAdvancedProject
+   prefers a "Ready" row but falls back to the first, and which project that is
+   varies between runs — so this failed intermittently: the same commit passed
+   28/28 at 19:32 and failed here at 20:12. */
 const STAGES = [
-  { tab: "Tender", url: /modules\/tenderlogix/, marker: "Requirements" },
+  { tab: "Tender", url: /modules\/tenderlogix/, marker: /Requirements|No tender read yet/ },
   // BIM Studio is on this surface whether or not anything has been measured —
   // modelling is how the first quantities often get made.
   { tab: "Drawings", url: /modules\/drawlogix/, marker: /BIM Studio/ },

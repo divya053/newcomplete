@@ -40,14 +40,45 @@ async function signIn(page: Page) {
   await expect(page).toHaveURL(/\/overview/);
 }
 
-/** The seeded project, without pinning its name — seeds get renamed. */
+/**
+ * A project that has actually been through the chain, without pinning its name
+ * — seeds get renamed.
+ *
+ * This took the first table row, which is not the same thing. The seed runs
+ * autopilot on two of its five projects; the other three carry no artifacts at
+ * all. Whichever sorts first varies between runs, and core-loop.spec.ts starts a
+ * run before this file executes, which can float a different project to the top.
+ *
+ * Every assertion below — artifacts exist, the bill has priced lines, the
+ * narrative composes from project data — is only true of a project with
+ * evidence, so the choice cannot be left to sort order. It passed on luck until
+ * a re-run of the same commit failed.
+ */
 async function openFirstProject(page: Page): Promise<string> {
-  await page.getByRole("link", { name: "Projects", exact: true }).click();
-  await page.locator("tbody tr").first().click();
+  const pid = await page.evaluate(async () => {
+    const get = async (u: string) => {
+      const r = await fetch(u);
+      return r.ok ? r.json() : null;
+    };
+    const projects = (await get("/api/v1/projects")) ?? [];
+    let best = "";
+    let most = 0;
+    for (const p of projects) {
+      const res = await get(`/api/v1/projects/${p.id}/artifacts`);
+      const items: any[] = res?.artifacts ?? res ?? [];
+      if (items.length > most) { most = items.length; best = p.id; }
+    }
+    return best;
+  });
+  expect(
+    pid,
+    "no project carries any artifact, so the chain was never seeded. " +
+      "Check the seed step rather than this test.",
+  ).toBeTruthy();
+
+  await page.goto(`/projects/${pid}`);
   await expect(page).toHaveURL(/\/projects\/[0-9a-f-]{8,}/);
-  const pid = page.url().match(/\/projects\/([0-9a-f-]{8,})/)?.[1];
-  expect(pid, "could not read a project id from the URL").toBeTruthy();
-  return pid!;
+  return pid;
 }
 
 /**
