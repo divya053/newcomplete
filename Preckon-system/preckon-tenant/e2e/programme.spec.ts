@@ -8,8 +8,15 @@ import { test, expect, type Page } from "@playwright/test";
 
 const EMAIL = process.env.E2E_EMAIL ?? "owner@cedarstone.build";
 const PASSWORD = process.env.E2E_PASSWORD ?? "preckon-tenant-2026";
-const PID = process.env.E2E_PROJECT_ID ?? "019fb44e-982b-79aa-b701-0e21855fb266";
-const URL = `/projects/${PID}/modules/schedulelogix`;
+// The project is found by navigating, not hard-coded.
+//
+// This used to default to a literal uuid — 019fb44e-982b-79aa-b701-0e21855fb266
+// — from somebody's local database. Every fresh install mints new ids, so in CI
+// that project simply does not exist: the page rendered nothing, `.prog-wrap`
+// never appeared, and all ten programme tests failed on what looked like a
+// broken grid rather than a stale constant. E2E_PROJECT_ID still overrides, for
+// pointing the suite at one specific project locally.
+const PID_OVERRIDE = process.env.E2E_PROJECT_ID;
 
 async function open(page: Page) {
   await page.setViewportSize({ width: 1500, height: 1000 });
@@ -18,7 +25,17 @@ async function open(page: Page) {
   await page.getByLabel("Password").fill(PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/overview/);
-  await page.goto(URL);
+
+  let pid = PID_OVERRIDE;
+  if (!pid) {
+    await page.getByRole("link", { name: "Projects", exact: true }).click();
+    await page.locator("tbody tr").first().click();
+    await expect(page).toHaveURL(/\/projects\/[0-9a-f-]{8,}/);
+    pid = page.url().match(/\/projects\/([0-9a-f-]{8,})/)?.[1];
+    expect(pid, "could not read a project id from the URL").toBeTruthy();
+  }
+
+  await page.goto(`/projects/${pid}/modules/schedulelogix`);
   await expect(page.locator(".prog-wrap")).toBeVisible({ timeout: 25_000 });
 }
 

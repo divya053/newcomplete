@@ -118,8 +118,31 @@ test.describe("golden path", () => {
     const programme = await api<any>(page, `/api/v1/projects/${pid}/programme`);
     expect(programme.status, "programme").toBe(200);
 
+    /* The export is a POST, not a download link, and deliberately so: the CPM
+       pass — critical path, floats, dates — runs client-side in gantt.tsx, and
+       the route formats the rows the client actually drew rather than deriving
+       them a second time and drifting from the screen it claims to copy.
+
+       This test used to issue a bare fetch(), i.e. a GET, and read the 405 as a
+       broken export. It was the test that was wrong. So send what the real
+       client sends: a section and an activity under it. */
     const xlsx = await page.evaluate(async (p) => {
-      const res = await fetch(p);
+      const res = await fetch(p, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          commencement: "2026-01-05",
+          projectName: "E2E Programme Export",
+          rows: [
+            { wbs: "1", name: "Substructure", depth: 0, isSection: true, sowRef: "",
+              start: 0, finish: 20, dur: 20, critical: true, milestone: false,
+              percent: 0, assignee: "", predecessors: "", basis: "" },
+            { wbs: "1.1", name: "Piling", depth: 1, isSection: false, sowRef: "S-01",
+              start: 0, finish: 12, dur: 12, critical: true, milestone: false,
+              percent: 40, assignee: "Marco Reyes", predecessors: "", basis: "rate" },
+          ],
+        }),
+      });
       return { status: res.status, type: res.headers.get("content-type") ?? "" };
     }, `/api/v1/projects/${pid}/programme/export.xlsx`);
 
