@@ -28,25 +28,38 @@ const ROOT = join(__dirname, "..");
 const SCHEMA = join(ROOT, "db", "schema.sql");
 const MIGRATIONS = join(ROOT, "db", "migrations");
 
-/** Table names created by a chunk of SQL. */
+/**
+ * Strip single-quoted string literals, one line at a time.
+ *
+ * Migrations guard ALTERs on information_schema and build the statement as a
+ * string, so a CREATE inside one is a literal rather than real DDL and must not
+ * count as a new table.
+ *
+ * The first attempt at this matched `'[^']*CREATE\s+TABLE[^']*\btable\b[^']*'`
+ * across the whole file. `[^']*` happily spans everything between ANY two
+ * apostrophes — including the ones in prose comments like "don't" — so real DDL
+ * sitting between two such quotes was silently treated as quoted. It excluded
+ * thirteen genuine tables (the whole PCM layer, bim_proposal, bim_authored_tool)
+ * and the suite went green having checked nothing about them.
+ *
+ * That is precisely the vacuous pass this file was written to prevent, so the
+ * replacement is deliberately narrow: quotes are only ever paired WITHIN a
+ * line, which is how these migrations actually write them.
+ */
+function stripQuoted(sql: string): string {
+  return sql
+    .split("\n")
+    .map((line) => line.replace(/'[^']*'/g, "''"))
+    .join("\n");
+}
+
+/** Table names created by a chunk of SQL, ignoring anything inside a string. */
 function createdTables(sql: string): Set<string> {
   const out = new Set<string>();
   // Matches CREATE TABLE, CREATE TABLE IF NOT EXISTS, with or without backticks.
   const re = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`?([a-z_][a-z0-9_]*)`?/gi;
-  for (const m of sql.matchAll(re)) out.add(m[1].toLowerCase());
+  for (const m of stripQuoted(sql).matchAll(re)) out.add(m[1].toLowerCase());
   return out;
-}
-
-/**
- * Tables created inside a prepared statement.
- *
- * Migrations guard ALTERs on information_schema and build the statement as a
- * string, so a CREATE inside one is a string literal rather than real DDL. Those
- * are picked up by the same regex and would otherwise look like new tables.
- */
-function isInsidePreparedStatement(sql: string, table: string): boolean {
-  const re = new RegExp(`'[^']*CREATE\\s+TABLE[^']*\\b${table}\\b[^']*'`, "i");
-  return re.test(sql);
 }
 
 function migrationFiles(): string[] {
@@ -77,7 +90,6 @@ describe("schema.sql and the migrations agree", () => {
       const sql = readFileSync(join(MIGRATIONS, file), "utf8");
       for (const table of createdTables(sql)) {
         if (schemaTables.has(table)) continue;
-        if (isInsidePreparedStatement(sql, table)) continue;
         missing.push({ table, migration: file });
       }
     }

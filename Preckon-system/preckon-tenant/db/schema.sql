@@ -27,6 +27,17 @@ SET NAMES utf8mb4;
 CREATE DATABASE IF NOT EXISTS `preckon_tenant`
   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE `preckon_tenant`;
+--
+-- A table that names its own DEFAULT CHARSET=utf8mb4 does NOT inherit this
+-- database's utf8mb4_unicode_ci — it takes the server default, which on MySQL 8
+-- is utf8mb4_0900_ai_ci. Two VARCHAR columns in different collations cannot be
+-- joined by a foreign key:
+--
+--   ERROR 3780: Referencing column 'userId' and referenced column 'id' in
+--   foreign key constraint 'fk_twofactor_user' are incompatible.
+--
+-- which stopped this file at table 71 of 86. Tables therefore state ENGINE only
+-- and inherit the collation set above.
 
 -- ============================================================================
 -- Better Auth tables (tenant identity pool). §1.1
@@ -201,6 +212,11 @@ CREATE TABLE project (
   name               VARCHAR(255) NOT NULL,
   code               VARCHAR(64),
   client_name        VARCHAR(255),
+  location VARCHAR(255) NULL,   -- migration 011
+  submitted_to VARCHAR(255) NULL,   -- migration 011
+  ref_no VARCHAR(64) NULL,   -- migration 011
+  due_date DATE NULL,   -- migration 012
+  submission JSON NULL,   -- migration 012
   status             VARCHAR(16) NOT NULL DEFAULT 'active',
   lifecycle_key      VARCHAR(64),                 -- a pack-declared lifecycle; null = none
   lifecycle_state    VARCHAR(64) NOT NULL DEFAULT 'start',
@@ -442,6 +458,7 @@ CREATE TABLE ai_job (
   max_attempts    INT NOT NULL DEFAULT 3,
   envelope        JSON NOT NULL,
   result          JSON,
+  roster JSON NULL,   -- migration 007
   error           JSON,
   prompt_ref      VARCHAR(128),
   trace_id        VARCHAR(128),
@@ -450,6 +467,10 @@ CREATE TABLE ai_job (
   cost_minor      BIGINT,
   idempotency_key VARCHAR(128),
   queued_at       DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  dispatched_at DATETIME(3) NULL,   -- migration 018
+  next_attempt_at DATETIME(3) NULL,   -- migration 018
+  lease_until DATETIME(3) NULL,   -- migration 018
+  last_error VARCHAR(500) NULL,   -- migration 018
   started_at      DATETIME(3),
   ended_at        DATETIME(3),
   KEY ai_job_scope_idx (tenant_id, project_id, status),
@@ -1321,10 +1342,14 @@ CREATE TABLE cad_extraction (
   block_count INT         NOT NULL DEFAULT 0,
   sheet_count INT         NOT NULL DEFAULT 0,
   summary     JSON        NOT NULL,
+  view_json JSON NULL,   -- migration 013
+  view_version SMALLINT NOT NULL DEFAULT 0,   -- migration 013
   -- Non-fatal problems the parse hit (recovered errors, missing ODA converter
   -- on a DWG, unresolved xrefs). Shown to the estimator, not swallowed.
   warnings    JSON,
   svg         LONGTEXT,
+  render_error VARCHAR(1000) NULL,   -- migration 009
+  rendered_at DATETIME(3) NULL,   -- migration 009
   created_at  DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   KEY cad_scope_idx (tenant_id, project_id),
   CONSTRAINT fk_cad_file FOREIGN KEY (file_id) REFERENCES file(id) ON DELETE CASCADE
@@ -1369,7 +1394,7 @@ CREATE TABLE learned_lesson (
   -- One row per (tenant, type, subject, field). A repeat correction increments
   -- times_seen rather than adding a second row that says the same thing.
   UNIQUE KEY lesson_unique (tenant_id, type_key, subject, field)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB;
 
 CREATE TABLE pcm_coordinate_system (
   id            CHAR(36) NOT NULL PRIMARY KEY,
@@ -1386,7 +1411,7 @@ CREATE TABLE pcm_coordinate_system (
   rotation_deg  DECIMAL(10,6) NOT NULL DEFAULT 0,
   created_at    DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   UNIQUE KEY pcm_crs_project (tenant_id, project_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB;
 
 -- ── ProcureLogix: enquiries, vendors and quotations (migration 023) ──────────
 -- Declared here as well as in the migration so tenant-scoping.test.ts can see
@@ -1407,7 +1432,7 @@ CREATE TABLE IF NOT EXISTS vendor (
   updated_at     DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   KEY idx_vendor_tenant (tenant_id, status),
   KEY idx_vendor_trade (tenant_id, trade)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS rfq (
   id             CHAR(36)     NOT NULL PRIMARY KEY,
@@ -1428,7 +1453,7 @@ CREATE TABLE IF NOT EXISTS rfq (
   UNIQUE KEY uq_rfq_package_revision (tenant_id, package_id, revision),
   KEY idx_rfq_project (tenant_id, project_id, status),
   KEY idx_rfq_due (tenant_id, status, due_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS rfq_vendor (
   id             CHAR(36)     NOT NULL PRIMARY KEY,
@@ -1440,7 +1465,7 @@ CREATE TABLE IF NOT EXISTS rfq_vendor (
   responded_at   DATETIME(3)  NULL,
   UNIQUE KEY uq_rfq_vendor (rfq_id, vendor_id),
   KEY idx_rfq_vendor_state (rfq_id, state)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS quote (
   id             CHAR(36)     NOT NULL PRIMARY KEY,
@@ -1458,7 +1483,7 @@ CREATE TABLE IF NOT EXISTS quote (
   created_at     DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   UNIQUE KEY uq_quote_rfq_vendor (rfq_id, vendor_id),
   KEY idx_quote_tenant (tenant_id, rfq_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS quote_line (
   id             CHAR(36)     NOT NULL PRIMARY KEY,
@@ -1470,7 +1495,7 @@ CREATE TABLE IF NOT EXISTS quote_line (
   note           VARCHAR(400) NULL,
   UNIQUE KEY uq_quote_line (quote_id, scope_item_id),
   KEY idx_quote_line_scope (scope_item_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB;
 
 -- ── QuantLogix: measurement rules as data (migration 024) ───────────────────
 -- Versioned rather than edited: a quantity measured last month was measured
@@ -1491,7 +1516,7 @@ CREATE TABLE IF NOT EXISTS measurement_rule_set (
   created_at    DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   UNIQUE KEY uq_rule_set_version (tenant_id, `key`, version),
   KEY idx_rule_set_project (tenant_id, project_id, status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS measurement_rule (
   id            CHAR(36)     NOT NULL PRIMARY KEY,
@@ -1508,7 +1533,7 @@ CREATE TABLE IF NOT EXISTS measurement_rule (
   applies_to    JSON          NULL,
   UNIQUE KEY uq_rule_key (rule_set_id, `key`),
   KEY idx_rule_seq (rule_set_id, seq)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB;
 
 -- ── MFA: TOTP with backup codes (migration 025) ─────────────────────────────
 -- camelCase to match the other Better Auth tables; the plugin builds its own
@@ -1521,7 +1546,7 @@ CREATE TABLE IF NOT EXISTS twoFactor (
   KEY idx_twofactor_user (userId),
   KEY idx_twofactor_secret (secret(64)),
   CONSTRAINT fk_twofactor_user FOREIGN KEY (userId) REFERENCES `user`(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB;
 
 -- ── SCIM provisioning (migration 026) ───────────────────────────────────────
 CREATE TABLE IF NOT EXISTS tenant_scim_token (
@@ -1535,4 +1560,265 @@ CREATE TABLE IF NOT EXISTS tenant_scim_token (
   revoked_at   DATETIME(3)  NULL,
   UNIQUE KEY uq_scim_token (token),
   KEY idx_scim_tenant (tenant_id, revoked_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB;
+
+
+-- ============================================================================
+-- PCM (migrations 015-017), plus AI proposals and authored tools.
+--
+-- These had never been declared here: schema.sql built a database without the
+-- entire PCM layer, so a fresh install and a migrated one were different
+-- products. The drift guard could not see it either — its quoted-string
+-- exclusion was matching across the whole file and swallowing them.
+-- ============================================================================
+
+CREATE TABLE pcm_project_revision (
+  id            CHAR(36) NOT NULL PRIMARY KEY,
+  tenant_id     CHAR(36) NOT NULL,
+  project_id    CHAR(36) NOT NULL,
+  revision      BIGINT   NOT NULL,
+  change_set_id CHAR(36),
+  created_at    DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  -- The unique key IS the concurrency control: two commits racing for the same
+  -- revision number, one of them loses on insert rather than on a read-check
+  -- that another transaction has already invalidated.
+  UNIQUE KEY pcm_rev_unique (tenant_id, project_id, revision)
+) ENGINE=InnoDB;
+
+CREATE TABLE pcm_spatial_node (
+  id           CHAR(36) NOT NULL PRIMARY KEY,
+  tenant_id    CHAR(36) NOT NULL,
+  project_id   CHAR(36) NOT NULL,
+  parent_id    CHAR(36),
+  node_type    ENUM('PROJECT','SITE','FACILITY','BUILDING','LEVEL','ZONE','SPACE','AREA','EXTERNAL_AREA','CUSTOM') NOT NULL,
+  code         VARCHAR(100),
+  name         VARCHAR(255) NOT NULL,
+  elevation_mm DECIMAL(14,3),
+  sort_order   INT NOT NULL DEFAULT 0,
+  metadata     JSON,
+  created_at   DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  KEY pcm_node_tree_idx (tenant_id, project_id, parent_id, sort_order)
+) ENGINE=InnoDB;
+
+CREATE TABLE pcm_object_type (
+  id                 CHAR(36) NOT NULL PRIMARY KEY,
+  tenant_id          CHAR(36),                       -- NULL = system type
+  code               VARCHAR(100) NOT NULL,          -- WALL, DOOR, COLUMN…
+  name               VARCHAR(255) NOT NULL,
+  discipline         ENUM('ARCHITECTURE','STRUCTURE','MECHANICAL','ELECTRICAL','PLUMBING','CIVIL','FIRE','LANDSCAPE','GENERAL','CUSTOM') NOT NULL,
+  geometry_behavior  ENUM('LINEAR','AREA','POINT','HOSTED','SPATIAL') NOT NULL,
+  -- How this type is measured. The measurement engine reads it; nothing else
+  -- decides how a wall becomes square metres.
+  measurement_rules  JSON,
+  ifc_entity         VARCHAR(100),                   -- IfcWall, IfcDoor… for later export
+  created_at         DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  UNIQUE KEY pcm_type_code (tenant_id, code)
+) ENGINE=InnoDB;
+
+CREATE TABLE pcm_object (
+  id                CHAR(36) NOT NULL PRIMARY KEY,
+  tenant_id         CHAR(36) NOT NULL,
+  project_id        CHAR(36) NOT NULL,
+  object_type_code  VARCHAR(100) NOT NULL,
+  name              VARCHAR(255),
+  mark              VARCHAR(100),                    -- W-1034, D104 — the drawing's own label
+  spatial_node_id   CHAR(36),
+  -- Canonical SEMANTIC geometry (blueprint §9.1): a baseline and a thickness,
+  -- not a mesh. Compact, editable, and the thing measurements are computed
+  -- from. Display meshes are derived and never stored here.
+  geometry          JSON,
+  -- Denormalised bounds, indexed. This is the PostGIS substitute: enough for
+  -- "what is in this view" and "what is near this" without a spatial extension.
+  min_x DECIMAL(16,4), min_y DECIMAL(16,4), max_x DECIMAL(16,4), max_y DECIMAL(16,4),
+  lifecycle_state   ENUM('PROPOSED','DESIGNED','COORDINATED','ISSUED','APPROVED','PROCURED','INSTALLED','INSPECTED','HANDED_OVER','DEMOLISHED','VOID') NOT NULL DEFAULT 'DESIGNED',
+  -- How this object came to exist, and how sure we are. An object recognised
+  -- from a PDF at 0.62 confidence must never be indistinguishable from one an
+  -- engineer drew.
+  source_method     ENUM('MANUAL','IMPORT','AI','RULE','INTEGRATION') NOT NULL DEFAULT 'MANUAL',
+  source_confidence DECIMAL(5,4),
+  -- What it was recognised FROM: the file, and the region on it. This is the
+  -- evidence behind "why is this wall here".
+  source_file_id    CHAR(36),
+  source_region     JSON,
+  revision          BIGINT NOT NULL DEFAULT 1,
+  deleted_at        DATETIME(3),                     -- soft: an audited model never hard-deletes
+  created_at        DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  created_by        CHAR(36),
+  updated_at        DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  KEY pcm_obj_scope_idx (tenant_id, project_id, object_type_code, deleted_at),
+  KEY pcm_obj_spatial_idx (tenant_id, project_id, spatial_node_id),
+  KEY pcm_obj_bbox_idx (tenant_id, project_id, min_x, min_y),
+  KEY pcm_obj_source_idx (tenant_id, source_file_id)
+) ENGINE=InnoDB;
+
+CREATE TABLE pcm_property_value (
+  id            CHAR(36) NOT NULL PRIMARY KEY,
+  tenant_id     CHAR(36) NOT NULL,
+  entity_id     CHAR(36) NOT NULL,
+  code          VARCHAR(150) NOT NULL,               -- fireRatingMin, acousticRatingStc…
+  value_string  TEXT,
+  value_decimal DECIMAL(20,6),
+  value_boolean TINYINT(1),
+  unit          VARCHAR(50),
+  source_method ENUM('MANUAL','IMPORT','AI','RULE','INTEGRATION') NOT NULL DEFAULT 'MANUAL',
+  confidence    DECIMAL(5,4),
+  updated_at    DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  UNIQUE KEY pcm_prop_unique (tenant_id, entity_id, code),
+  KEY pcm_prop_lookup_idx (tenant_id, code, value_decimal)
+) ENGINE=InnoDB;
+
+CREATE TABLE pcm_relationship (
+  id                CHAR(36) NOT NULL PRIMARY KEY,
+  tenant_id         CHAR(36) NOT NULL,
+  project_id        CHAR(36) NOT NULL,
+  source_entity_id  CHAR(36) NOT NULL,
+  relationship_type VARCHAR(60) NOT NULL,            -- HOSTED_BY, CONTAINS, REPRESENTED_IN…
+  target_entity_id  CHAR(36) NOT NULL,
+  source_method     ENUM('MANUAL','IMPORT','AI','RULE','INTEGRATION') NOT NULL DEFAULT 'MANUAL',
+  confidence        DECIMAL(5,4),
+  metadata          JSON,
+  created_at        DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  -- Both directions are queried constantly — "what does this host" and "what
+  -- hosts this" — so both get an index.
+  KEY pcm_rel_out_idx (tenant_id, source_entity_id, relationship_type),
+  KEY pcm_rel_in_idx  (tenant_id, target_entity_id, relationship_type)
+) ENGINE=InnoDB;
+
+CREATE TABLE pcm_change_set (
+  id                    CHAR(36) NOT NULL PRIMARY KEY,
+  tenant_id             CHAR(36) NOT NULL,
+  project_id            CHAR(36) NOT NULL,
+  change_type           ENUM('USER_EDIT','AI_EDIT','IMPORT','INTEGRATION','RULE','MERGE','REVISION') NOT NULL,
+  status                ENUM('DRAFT','VALIDATING','AWAITING_APPROVAL','APPROVED','COMMITTED','REJECTED','FAILED') NOT NULL DEFAULT 'DRAFT',
+  title                 VARCHAR(255) NOT NULL,
+  description           TEXT,
+  requested_by          CHAR(36),
+  approved_by           CHAR(36),
+  base_project_revision BIGINT NOT NULL,
+  created_at            DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  committed_at          DATETIME(3),
+  KEY pcm_cs_scope_idx (tenant_id, project_id, status, created_at)
+) ENGINE=InnoDB;
+
+CREATE TABLE pcm_change_operation (
+  id            CHAR(36) NOT NULL PRIMARY KEY,
+  tenant_id     CHAR(36) NOT NULL,
+  change_set_id CHAR(36) NOT NULL,
+  sequence      INT NOT NULL,
+  operation     ENUM('CREATE','UPDATE','DELETE','RELATE','UNRELATE','TRANSFORM','RETYPE') NOT NULL,
+  entity_type   VARCHAR(60) NOT NULL,
+  entity_id     CHAR(36) NOT NULL,
+  -- The before/after that make undo an inverse ChangeSet rather than a deletion
+  -- of history, and that let the preview show a real diff instead of a summary.
+  before_state  JSON,
+  after_state   JSON,
+  KEY pcm_op_set_idx (tenant_id, change_set_id, sequence)
+) ENGINE=InnoDB;
+
+CREATE TABLE pcm_quantity (
+  id                    CHAR(36) NOT NULL PRIMARY KEY,
+  tenant_id             CHAR(36) NOT NULL,
+  project_id            CHAR(36) NOT NULL,
+  entity_id             CHAR(36) NOT NULL,           -- the object measured
+  rule_code             VARCHAR(100) NOT NULL,       -- NET_WALL_AREA:v1
+  quantity_value        DECIMAL(20,6) NOT NULL,
+  unit                  VARCHAR(20) NOT NULL,
+  status                ENUM('CURRENT','DIRTY','SUPERSEDED','ERROR') NOT NULL DEFAULT 'CURRENT',
+  source_project_revision BIGINT NOT NULL,
+  -- The arithmetic, kept. "386.42 m²" is not an answer to "why"; the working
+  -- out is, and it is what an estimator argues with.
+  calculation           JSON,
+  updated_at            DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  UNIQUE KEY pcm_qty_unique (tenant_id, entity_id, rule_code),
+  KEY pcm_qty_status_idx (tenant_id, project_id, status)
+) ENGINE=InnoDB;
+
+CREATE TABLE pcm_boq_map (
+  id                CHAR(36) NOT NULL PRIMARY KEY,
+  tenant_id         CHAR(36) NOT NULL,
+  project_id        CHAR(36) NOT NULL,
+  boq_artifact_id   CHAR(36) NOT NULL,               -- the existing boq_line artifact
+  entity_id         CHAR(36),
+  quantity_id       CHAR(36),
+  allocation_factor DECIMAL(10,6) NOT NULL DEFAULT 1,
+  mapping_source    ENUM('MANUAL','RULE','AI','IMPORT') NOT NULL DEFAULT 'RULE',
+  confidence        DECIMAL(5,4),
+  status            ENUM('PROPOSED','APPROVED','REJECTED') NOT NULL DEFAULT 'PROPOSED',
+  created_at        DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  KEY pcm_map_boq_idx (tenant_id, boq_artifact_id, status),
+  KEY pcm_map_entity_idx (tenant_id, entity_id)
+) ENGINE=InnoDB;
+
+CREATE TABLE pcm_source_transform (
+  id             CHAR(36) NOT NULL PRIMARY KEY,
+  tenant_id      CHAR(36) NOT NULL,
+  project_id     CHAR(36) NOT NULL,
+  source_kind    ENUM('BIM_STUDIO','DXF','DWG','PDF','IFC','MANUAL','OTHER') NOT NULL,
+  source_file_id CHAR(36),
+  -- What the file said about itself. NULL means it said nothing, which is a
+  -- fact worth keeping: an assumed unit and a declared one carry very different
+  -- confidence and should not look alike afterwards.
+  declared_unit  VARCHAR(20),
+  -- What was actually applied, and why. `scale_to_m` multiplied every
+  -- coordinate; `basis` says whether that came from the file, a project
+  -- default, or a human overriding both.
+  scale_to_m     DECIMAL(20,10) NOT NULL DEFAULT 1,
+  basis          ENUM('DECLARED','INFERRED','PROJECT_DEFAULT','USER_OVERRIDE') NOT NULL DEFAULT 'DECLARED',
+  offset_x       DECIMAL(18,6) NOT NULL DEFAULT 0,
+  offset_y       DECIMAL(18,6) NOT NULL DEFAULT 0,
+  rotation_deg   DECIMAL(10,6) NOT NULL DEFAULT 0,
+  note           VARCHAR(500),
+  created_by     CHAR(36),
+  created_at     DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  KEY pcm_xform_src_idx (tenant_id, project_id, source_file_id)
+) ENGINE=InnoDB;
+
+CREATE TABLE bim_proposal (
+  id           CHAR(36) NOT NULL PRIMARY KEY,
+  tenant_id    CHAR(36) NOT NULL,
+  project_id   CHAR(36) NOT NULL,
+  -- The version this was drafted against. Committing onto a model that has
+  -- moved is refused rather than silently overwriting somebody else's work.
+  base_version INT NOT NULL,
+  instruction  VARCHAR(2000) NOT NULL,
+  specialist   VARCHAR(40),
+  -- The whole proposed document. A patch would be smaller and would also mean
+  -- reconstructing state to show a preview; the document is a few hundred KB
+  -- and this is the copy a human actually approved.
+  doc          JSON NOT NULL,
+  -- What changed, in the terms the reader thinks in: 4 walls added, 1 door
+  -- moved. Computed once at proposal time.
+  diff         JSON NOT NULL,
+  reply        TEXT,
+  status       ENUM('PROPOSED','APPLIED','DISCARDED','EXPIRED') NOT NULL DEFAULT 'PROPOSED',
+  created_by   CHAR(36),
+  created_at   DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  decided_at   DATETIME(3),
+  KEY bim_prop_scope_idx (tenant_id, project_id, status, created_at)
+) ENGINE=InnoDB;
+
+CREATE TABLE bim_authored_tool (
+  id          CHAR(36) NOT NULL PRIMARY KEY,
+  tenant_id   CHAR(36) NOT NULL,
+  -- snake_case, unique per author. This is the name the model emits, so it is
+  -- validated against the same pattern the registry uses.
+  name        VARCHAR(64) NOT NULL,
+  label       VARCHAR(120) NOT NULL,
+  module      VARCHAR(80) NOT NULL DEFAULT 'My Tools',
+  -- What the agent searches on. A tool with a vague description is a tool that
+  -- never gets discovered, so this is NOT NULL on purpose.
+  description VARCHAR(500) NOT NULL,
+  -- Declared parameters: [{name, type, description, required, default}].
+  params      JSON NOT NULL,
+  -- The recipe: [{tool, args, as?, optional?}]. Data, never code — see above.
+  steps       JSON NOT NULL,
+  keywords    JSON,
+  scope       ENUM('PERSONAL','GLOBAL') NOT NULL DEFAULT 'PERSONAL',
+  owner_id    CHAR(36) NOT NULL,
+  created_at  DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at  DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  -- One name per author. Two tools answering to the same name would make which
+  -- one the agent called a matter of row order.
+  UNIQUE KEY bim_tool_name_uq (tenant_id, owner_id, name),
+  KEY bim_tool_owner_idx (tenant_id, owner_id, updated_at)
+) ENGINE=InnoDB;
