@@ -40,7 +40,14 @@ CREATE TABLE `user` (
   emailVerified BOOLEAN      NOT NULL DEFAULT FALSE,
   image         TEXT,
   createdAt     DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-  updatedAt     DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
+  updatedAt     DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  -- Migration 025. Better Auth writes this on every user create, so a database
+  -- built from this file WITHOUT it cannot create a user at all:
+  --   ERROR [Better Auth]: Failed to create user
+  --   Error: Unknown column 'twoFactorEnabled' in 'field list'
+  -- which is what broke every E2E run — compose initialises the database from
+  -- this file alone and never applies migrations.
+  twoFactorEnabled BOOLEAN   NOT NULL DEFAULT FALSE
 ) ENGINE=InnoDB;
 
 CREATE TABLE `session` (
@@ -216,7 +223,9 @@ CREATE TABLE app_user (
   name         VARCHAR(255),
   avatar_url   TEXT,
   status       ENUM('invited','active','suspended') NOT NULL DEFAULT 'invited',
-  auth_user_id VARCHAR(255),                      -- soft link to Better Auth user
+  auth_user_id VARCHAR(255),
+  -- Migration 026.
+  scim_external_id VARCHAR(255) NULL,                      -- soft link to Better Auth user
   created_at   DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_at   DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   UNIQUE KEY app_user_tenant_email_uidx (tenant_id, email),

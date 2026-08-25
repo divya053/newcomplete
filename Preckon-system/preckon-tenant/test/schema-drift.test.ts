@@ -113,3 +113,60 @@ describe("schema.sql and the migrations agree", () => {
     }
   });
 });
+
+describe("schema.sql declares every COLUMN the migrations add", () => {
+  /* The table check above was not enough.
+     `twoFactorEnabled` was added to the `user` table by migration 025 and never
+     added here. docker-compose initialises the database from schema.sql alone —
+     it does not apply migrations — so every fresh database lacked the column,
+     Better Auth could not create a user at all:
+
+       ERROR [Better Auth]: Failed to create user
+       Error: Unknown column 'twoFactorEnabled' in 'field list'
+
+     and every E2E run failed at the first sign-in. A missing column reads as
+     broken auth, exactly the way the missing fixture did.
+
+     `scim_external_id` (migration 026) had drifted the same way. */
+  const schemaSql = readFileSync(SCHEMA, "utf8");
+
+  /** Columns a migration adds, whether by plain ALTER or inside a guarded string. */
+  function addedColumns(sql: string): string[] {
+    const out = new Set<string>();
+    for (const m of sql.matchAll(/ADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?`?([a-zA-Z_][a-zA-Z0-9_]*)`?/gi)) {
+      out.add(m[1]);
+    }
+    return [...out];
+  }
+
+  it("finds ADD COLUMN statements at all, so a pass is not vacuous", () => {
+    const all = migrationFiles().flatMap((f) => addedColumns(readFileSync(join(MIGRATIONS, f), "utf8")));
+    expect(all.length).toBeGreaterThan(5);
+  });
+
+  it("declares every added column", () => {
+    const missing: { column: string; migration: string }[] = [];
+
+    for (const file of migrationFiles()) {
+      const sql = readFileSync(join(MIGRATIONS, file), "utf8");
+      for (const col of addedColumns(sql)) {
+        // Word-boundary match: the column has to appear as an identifier
+        // somewhere in schema.sql, not merely as a substring of another name.
+        if (new RegExp(`\\b${col}\\b`).test(schemaSql)) continue;
+        missing.push({ column: col, migration: file });
+      }
+    }
+
+    expect(
+      missing,
+      missing.length
+        ? `\n\nThese columns are added by a migration but never declared in db/schema.sql:\n` +
+          missing.map((m) => `  ${m.column.padEnd(28)} (${m.migration})`).join("\n") +
+          `\n\ndocker-compose builds a database from schema.sql ALONE. A column only in\n` +
+          `a migration means every fresh install is missing it, and the failure\n` +
+          `surfaces as something unrelated — "Unknown column ... in 'field list'"\n` +
+          `during sign-in rather than anything pointing at the schema.\n`
+        : "",
+    ).toEqual([]);
+  });
+});
