@@ -65,6 +65,16 @@ services:
       # Set ANTHROPIC_API_KEY (e.g. in a .env next to this file) to use REAL Claude
       # agents; unset → deterministic stub agents. Model ids are env-overridable.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # The image sets NODE_ENV=production, so stubPolicy() refuses substitute
+      # output unless this is explicitly true — deliberately, so stub quantities
+      # can never be mistaken for real ones. That leaves a keyless run with every
+      # AI job FAILING, which is correct for a deployment and wrong for CI: the
+      # e2e job has no key, so all 12 workflows failed, autopilot ended at 0/12,
+      # and all 28 specs failed on missing data.
+      #
+      # Passing it through lets CI opt in by choice rather than by accident.
+      # Unset (the default) it stays empty and production behaviour is unchanged.
+      DEMO_STUB_MODE: ${DEMO_STUB_MODE:-}
     ports:
       # Internal. Core reaches it over the compose network as http://worker:4000;
       # this publish is only so a developer can curl the /claude proxy locally.

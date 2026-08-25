@@ -65,14 +65,69 @@ const PROJECTS = [
   { name: "Riverside Hospital — East Wing", code: "RHW-2026", client_name: "Regional Health Trust", run: false },
 ];
 
-async function drivePursuit(pid, label) {
-  await call(`/api/v1/projects/${pid}/pursuit/start`, { method: "POST", body: "{}" });
-  for (let i = 0; i < 160; i++) {   // construction runs 12 workflows (incl. a map) — allow time
-    const s = (await call(`/api/v1/projects/${pid}/pursuit`)).body;
-    if (s && !s.autopilot && s.completed >= s.total) return `${s.completed}/${s.total} · ${s.lifecycleState}`;
+// Returns { ok, detail }. Never reports "timeout" for a pursuit that actually
+// finished — that misdiagnosis cost real debugging time, so it is worth explaining.
+//
+// continuePursuit() treats a workflow as attempted once it has ANY terminal run:
+// completed, failed OR cancelled. That is deliberate — it stops autopilot from
+// retrying a deterministically-failing workflow forever. When the last workflow
+// reaches a terminal state, autopilot clears its own flag and stops.
+//
+// The old exit condition was `!autopilot && completed >= total`, and `completed`
+// counts ONLY status === "completed". So one failed workflow left autopilot
+// finished (flag clear) but the count permanently short. This loop then polled
+// all 160 times and printed "timeout" — for a pursuit that had ended minutes
+// earlier with a failure it never named.
+//
+// So: a cleared autopilot flag means the pursuit is OVER. Report what actually
+// happened to each workflow.
+async function drivePursuit(pid) {
+  const started = await call(`/api/v1/projects/${pid}/pursuit/start`, { method: "POST", body: "{}" });
+  if (!ok(started)) return { ok: false, detail: `could not start: HTTP ${started.status} ${JSON.stringify(started.body)}` };
+
+  // A status body is only trustworthy if it has the shape pursuitStatus()
+  // returns. Without this check an ERROR body passes straight through: it has no
+  // `autopilot` field, so `!s.autopilot` is true and the loop breaks; `s.plan`
+  // is undefined, so nothing looks wrong; and the pursuit is reported as a
+  // SUCCESS that never ran. Silent false success is worse than the timeout this
+  // function replaced, so the shape is checked rather than assumed.
+  const valid = (b) =>
+    b && typeof b === "object" && typeof b.autopilot === "boolean" &&
+    Number.isFinite(b.total) && Array.isArray(b.plan);
+
+  const DEADLINE_MS = 320_000;
+  const began = Date.now();
+  let s = null;
+  let lastBad = null;   // most recent unusable body, for the error message
+
+  while (Date.now() - began < DEADLINE_MS) {
+    const res = await call(`/api/v1/projects/${pid}/pursuit`);
+    if (!valid(res.body)) { lastBad = res; await sleep(2000); continue; }
+    s = res.body;
+    if (!s.autopilot) break;               // autopilot is done, however it ended
     await sleep(2000);
   }
-  return "timeout";
+
+  if (!s) {
+    const why = lastBad
+      ? `last response HTTP ${lastBad.status}: ${JSON.stringify(lastBad.body).slice(0, 300)}`
+      : "no response at all";
+    return { ok: false, detail: `never returned a usable pursuit status — ${why}` };
+  }
+
+  const bad = s.plan.filter((w) => w.status !== "completed");
+  const names = () => bad.map((w) => `${w.key}=${w.status}`).join(", ") || "none reported";
+
+  // Still flagged on after the deadline: genuinely stuck, not merely failed. The
+  // usual cause is a run parked in awaiting_review — continuePursuit() will not
+  // start the next workflow while one is running or awaiting, so a review gate
+  // holds autopilot open indefinitely.
+  if (s.autopilot) {
+    return { ok: false, detail: `STUCK after ${Math.round((Date.now() - began) / 1000)}s, autopilot still on — ${names()}` };
+  }
+
+  if (bad.length === 0) return { ok: true, detail: `${s.completed}/${s.total} · ${s.lifecycleState}` };
+  return { ok: false, detail: `autopilot ENDED with ${bad.length}/${s.total} not completed — ${names()}` };
 }
 
 (async () => {
@@ -123,9 +178,21 @@ async function drivePursuit(pid, label) {
   console.log(`projects ensured: ${created.filter((p) => p.id).length}/${PROJECTS.length}`);
 
   // 6) Run autopilot on the flagged pursuits so artifacts/lifecycle populate.
+  const failures = [];
   for (const p of created.filter((p) => p.run && p.id)) {
     process.stdout.write(`  ▶ autopilot: ${p.name.padEnd(34)} `);
-    console.log(await drivePursuit(p.id, p.name));
+    const r = await drivePursuit(p.id);
+    console.log(r.ok ? r.detail : `FAILED — ${r.detail}`);
+    if (!r.ok) failures.push(`${p.name}: ${r.detail}`);
+  }
+
+  if (failures.length) {
+    console.error(`\n${failures.length} pursuit(s) did not complete:`);
+    for (const f of failures) console.error(`   - ${f}`);
+    console.error("\nThe workspace is only partly seeded. The E2E specs walk a project with");
+    console.error("data at every chain stage, so they would fail downstream on missing data");
+    console.error("rather than here. Failing now instead.\n");
+    process.exit(1);
   }
 
   const verify = (await call("/api/v1/audit/verify")).body;
