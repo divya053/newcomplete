@@ -339,7 +339,14 @@ export async function recomputeQuantities(
   const objects = await query<{ id: string; object_type_code: string; geometry: any }>(
     `SELECT o.id, o.object_type_code, o.geometry FROM pcm_object o
       WHERE o.tenant_id = ? AND o.project_id = ? AND o.deleted_at IS NULL
-      ${opts.onlyDirty ? "AND EXISTS (SELECT 1 FROM pcm_quantity q WHERE q.entity_id = o.id AND q.status = 'DIRTY')" : ""}`,
+      ${opts.onlyDirty
+          // q.tenant_id is stated rather than inherited. The outer query is
+          // already scoped and o.id is a UUID, so this subquery could not reach
+          // another tenant in practice — but that is isolation by provenance,
+          // and it only holds while somebody remembers why. Stating the
+          // constraint costs nothing and survives the next edit.
+          ? "AND EXISTS (SELECT 1 FROM pcm_quantity q WHERE q.tenant_id = o.tenant_id AND q.entity_id = o.id AND q.status = 'DIRTY')"
+          : ""}`,
     [s.tenantId, s.projectId]
   );
   if (!objects.length) return { measured: 0, objects: 0 };
