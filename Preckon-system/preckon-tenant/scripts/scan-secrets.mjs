@@ -100,6 +100,11 @@ const ALLOW = [
   /* log.test.ts asserts that the logger REDACTS these. They have to be present
      for the test to mean anything, and they authenticate nothing. */
   { file: "test/log.test.ts", value: /.*/ },
+  /* This scanner's own tests. Every fixture in there is a secret-shaped string
+     that exists precisely so the scan can be proven to catch it — the file
+     tripping the scan is the tests working, not a leak. Caught by the scan
+     itself once the vendor-key rule was added, which is a fair demonstration. */
+  { file: "test/scan-secrets.test.ts", value: /.*/ },
 ];
 
 /* Applied ONLY to the code rule.
