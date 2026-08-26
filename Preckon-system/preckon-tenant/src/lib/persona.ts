@@ -223,3 +223,56 @@ export async function handleSupervisorResult(
   });
   return true;
 }
+
+/**
+ * Clear every message in a conversation, keeping the conversation itself.
+ *
+ * A Copilot thread accumulates the whole project's context across many turns.
+ * Once it is long, two things go wrong: the answers drift toward whatever was
+ * discussed earliest, and nobody can find the reply they actually wanted. The
+ * fix people expect is a Clear button, so this is that.
+ *
+ * The conversation ROW survives, deliberately. It is referenced by
+ * orchestrator_conversation.run_id and by the drawer's "find my thread" lookup;
+ * deleting it would orphan those and lose the thread's identity for the sake of
+ * emptying it.
+ *
+ * The delete is audited like any other mutation. Messages carry the reasoning
+ * behind confirmed artifacts, so their removal is a governance event, not a UI
+ * convenience — the audit row records who cleared what and how many turns went.
+ */
+export async function clearConversation(
+  actor: AuditActor,
+  opts: { tenantId: string; projectId: string; conversationId: string },
+): Promise<{ cleared: number }> {
+  const convo = await queryOne<{ id: string; project_id: string }>(
+    "SELECT id, project_id FROM orchestrator_conversation WHERE id = ? AND tenant_id = ?",
+    [opts.conversationId, opts.tenantId],
+  );
+  // Both predicates matter: the tenant check above is isolation, and this one
+  // stops a conversation from one project being cleared through another
+  // project's URL.
+  if (!convo || convo.project_id !== opts.projectId) throw errNotFound("Conversation");
+
+  const before = await queryOne<{ n: number }>(
+    "SELECT COUNT(*) AS n FROM orchestrator_message WHERE tenant_id = ? AND conversation_id = ?",
+    [opts.tenantId, opts.conversationId],
+  );
+  const cleared = Number(before?.n ?? 0);
+
+  await tx(async (conn) => {
+    await conn.query(
+      "DELETE FROM orchestrator_message WHERE tenant_id = ? AND conversation_id = ?",
+      [opts.tenantId, opts.conversationId],
+    );
+    await appendAudit(conn, actor, {
+      action: "conversation.cleared",
+      targetKind: "conversation",
+      targetId: opts.conversationId,
+      projectId: opts.projectId,
+      summary: { messages: cleared },
+    });
+  });
+
+  return { cleared };
+}
