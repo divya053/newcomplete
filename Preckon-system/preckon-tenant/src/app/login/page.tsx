@@ -37,6 +37,20 @@ export default function LoginPage() {
 
   return (
     <div className="login-wrap">
+      {/* Brand mark in the page background, behind the card.
+
+          dir="ltr" is on the INNER span, not the container, and the split
+          matters. Logical properties resolve against the element's own
+          direction, so putting dir="ltr" on the positioned container pinned
+          inset-inline-end to the right and the mark stayed on the right side in
+          Arabic instead of mirroring. The container inherits the page direction
+          so it moves; the span pins the glyph order so the trailing period does
+          not reorder into ".Preckon".
+
+          aria-hidden — the card already carries the name as real content. */}
+      <div className="login-bgmark" aria-hidden="true">
+        <span dir="ltr">Preckon<span className="o">.</span></span>
+      </div>
       <div className="login">
         <div className="brand">
           <span className="wm">Preckon<span className="o">.</span></span>

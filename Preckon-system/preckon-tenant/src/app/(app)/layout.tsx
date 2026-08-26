@@ -284,15 +284,17 @@ function AppShell({
                         aria-hidden because it is a logo, not content: the page
                         already has a title and a breadcrumb, and a screen reader
                         announcing "Preckon full stop" on every route is noise. */}
-                    {/* dir="ltr" is load-bearing, not decoration. The trailing
-                        period is a bidi-neutral character, so under RTL it
-                        reorders to the front and the mark renders ".Preckon".
-                        A wordmark is a name, not prose — it keeps its own
-                        direction in every locale. The block itself still moves
-                        to the left in Arabic, which is correct; only the glyph
-                        order is pinned. */}
-                    <span className="tb-wm" dir="ltr" aria-hidden="true">
-                      Preckon<span className="o">.</span>
+                    {/* dir="ltr" is load-bearing, and it belongs on the INNER
+                        span. The trailing period is bidi-neutral, so without it
+                        the mark renders ".Preckon" under RTL. But logical
+                        properties resolve against the element's OWN direction:
+                        with dir on the outer span, border-inline-start stayed
+                        the left edge in Arabic and the separator ended up at
+                        the screen edge instead of between the mark and the
+                        controls. Outer inherits the page direction and mirrors;
+                        inner pins the glyph order. */}
+                    <span className="tb-wm" aria-hidden="true">
+                      <span dir="ltr">Preckon<span className="o">.</span></span>
                     </span>
                   </div>
                 </header>
