@@ -138,16 +138,31 @@ a{color:inherit; text-decoration:none;}
    scroll it away. Sized in vw so it stays proportionate on a projector, which
    is where this page is most often seen. */
 .login-bgmark{
-  position:fixed; inset-block-start:clamp(20px,4vh,52px); inset-inline-end:clamp(20px,4vw,64px);
+  position:fixed; inset-block-start:clamp(24px,6vh,72px); inset-inline-start:clamp(24px,4vw,72px);
   z-index:1; pointer-events:none; user-select:none;
-  font-family:var(--font-display); font-weight:600; line-height:1;
-  font-size:clamp(34px,5.5vw,84px); letter-spacing:-.035em;
-  color:var(--ink); opacity:.13;
+  font-family:var(--font-display); font-weight:700; line-height:1;
+  font-size:clamp(44px,8vw,132px); letter-spacing:-.04em;
+  /* Alpha in the COLOUR, not opacity on the element. `opacity` fades the whole
+     subtree, so the dot inherited the fade and no child rule could bring it
+     back — the accent came out a washed grey-green. With the alpha on the
+     wordmark's own colour, the dot can sit at full brand strength beside it. */
+  color:color-mix(in srgb, var(--ink) 32%, transparent);
 }
-/* The dot keeps full brand strength so the mark still reads as Preckon rather
-   than as grey text. */
-.login-bgmark .o{color:var(--brand); opacity:1;}
-[data-theme="dark"] .login-bgmark{opacity:.17;}
+/* The dot at full strength, so the mark reads as the logo rather than as grey
+   text. A soft glow in dark, where a flat accent on a near-black ground looks
+   painted on. */
+.login-bgmark .o{color:var(--brand);}
+[data-theme="dark"] .login-bgmark{color:color-mix(in srgb, var(--ink) 38%, transparent);}
+[data-theme="dark"] .login-bgmark .o{filter:drop-shadow(0 0 22px color-mix(in srgb, var(--brand) 60%, transparent));}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]) .login-bgmark{color:color-mix(in srgb, var(--ink) 38%, transparent);}
+  :root:not([data-theme="light"]) .login-bgmark .o{filter:drop-shadow(0 0 22px color-mix(in srgb, var(--brand) 60%, transparent));}
+}
+/* Below ~900px the mark and the card compete for the same horizontal band, so
+   it steps back rather than sitting behind the form fields. */
+@media (max-width:900px){
+  .login-bgmark{font-size:clamp(38px,7vw,64px); color:color-mix(in srgb, var(--ink) 20%, transparent);}
+}
 /* Below the card's own width the mark would sit behind the form and fight the
    labels for contrast, so it goes. */
 @media (max-width:560px){ .login-bgmark{display:none;} }
