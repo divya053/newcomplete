@@ -5,8 +5,11 @@ import { authClient } from "@/lib/auth-client";
 
 /* A non-secret identity label only. NEXT_PUBLIC_ values reach the browser, so
    nothing secret may ever be read here — that is the point: the email is a
-   convenience, and there is deliberately no password counterpart. */
-const DEMO_IDENTITY = process.env.NEXT_PUBLIC_DEMO_IDENTITY ?? "";
+   convenience, and there is deliberately no password counterpart.
+
+   Set NEXT_PUBLIC_DEMO_IDENTITY per environment to change it without a rebuild
+   of this file; the fallback is the demo workspace this deployment presents. */
+const DEMO_IDENTITY = process.env.NEXT_PUBLIC_DEMO_IDENTITY ?? "owner@cedarstone.build";
 
 export default function LoginPage() {
   const router = useRouter();
