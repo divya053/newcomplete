@@ -3,11 +3,21 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 
+/* A non-secret identity label only. NEXT_PUBLIC_ values reach the browser, so
+   nothing secret may ever be read here — that is the point: the email is a
+   convenience, and there is deliberately no password counterpart. */
+const DEMO_IDENTITY = process.env.NEXT_PUBLIC_DEMO_IDENTITY ?? "";
+
 export default function LoginPage() {
   const router = useRouter();
   const { data: session } = authClient.useSession();
-  const [email, setEmail] = useState("owner@aigcc.group");
-  const [password, setPassword] = useState("preckon-tenant-2026");
+  /* The password starts EMPTY and is never prefilled.
+     It used to default to a working credential, and the panel below printed it
+     in full, so anyone who loaded /login was handed a live sign-in. A demo
+     identity is a convenience; a demo secret is a disclosure. The email is a
+     non-secret label and may still be suggested. */
+  const [email, setEmail] = useState(DEMO_IDENTITY);
+  const [password, setPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -45,7 +55,7 @@ export default function LoginPage() {
         </form>
         <div className="restricted">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="10" width="16" height="10" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg>
-          Demo tenant owner · owner@aigcc.group / preckon-tenant-2026
+          {DEMO_IDENTITY ? `Demo tenant owner · ${DEMO_IDENTITY}` : "Restricted workspace"}
         </div>
       </div>
     </div>
