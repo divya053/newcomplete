@@ -48,7 +48,7 @@ export default function LoginPage() {
 
           aria-hidden — the card already carries the name as real content. */}
       <div className="login-bgmark" aria-hidden="true">
-        <svg viewBox="0 0 48 56" fill="none">
+        <svg viewBox="0 0 268 56" fill="none">
           <path
             d="M16 50V8h14a13 13 0 0 1 0 26H16"
             stroke="currentColor"
@@ -57,6 +57,18 @@ export default function LoginPage() {
             strokeLinejoin="round"
           />
           <circle className="o" cx="25" cy="21" r="3.6" />
+          {/* The brand sets the wordmark's own "o" in the accent — the counter
+              of the P and that letter are the same gesture. Worth noting the
+              card's inline wordmark instead renders "Preckon" plus a teal full
+              stop, so the two are not the same lockup. This one follows the
+              asset. */}
+          <text
+            x="64" y="41"
+            fontSize="42" fontWeight="600" letterSpacing="-1.4"
+            fill="currentColor"
+          >
+            Preck<tspan className="o">o</tspan>n
+          </text>
         </svg>
       </div>
       <div className="login">
