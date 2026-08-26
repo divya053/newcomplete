@@ -27,23 +27,42 @@ const TOKEN = process.env.INTERNAL_SERVICE_TOKEN ?? "change-me-service-token";
 //   TENANT_ID=00000000-0000-7000-8000-000000000001 node scripts/seed-cedarstone.mjs
 const TENANT = process.env.TENANT_ID ?? "00000000-0000-7000-8000-0000000000a1";
 
+/* Secrets come from the environment, and their absence is a hard stop.
+ *
+ * These used to default to a published literal, so running the script with no
+ * environment at all quietly provisioned a known password. A seed that invents
+ * a credential is indistinguishable from one that was configured properly,
+ * which is the whole problem. */
+function required(name, hint) {
+  const v = process.env[name];
+  if (!v) {
+    console.error(`\n${name} is not set.\n${hint}\n`);
+    process.exit(2);
+  }
+  return v;
+}
+
 const WORKSPACE = "Cedar & Stone Builders";
 const BRAND = "#15C2A8";
 const LOCALE = process.env.WORKSPACE_LOCALE ?? "en"; // en | ar | fr
 
 const OWNER = {
-  email: "owner@cedarstone.build",
+  email: process.env.SEED_OWNER_EMAIL ?? "owner@cedarstone.build",   // a label, not a secret
   name: "Sam Whitfield",
-  password: process.env.OWNER_PASSWORD ?? "preckon-tenant-2026",
+  password: required("OWNER_PASSWORD",
+    "Choose the demo owner password for this environment, e.g.\n  OWNER_PASSWORD=... node scripts/seed-cedarstone.mjs"),
 };
 
 // Cedar & Stone's own people. Deliberately different names from the Host's
 // staff logins (shruthi/pranavi @techsme.com): the Host operates the platform,
 // the tenant is a customer, and a demo that shares names across the two planes
 // makes it look like one directory when the whole point is that they're separate.
+const ADMIN_PASSWORD = required("SEED_ADMIN_PASSWORD",
+  "Password for the seeded demo ADMIN accounts. These are privileged, so there is deliberately no default.");
+
 const USERS = [
-  { email: "dana@cedarstone.build", name: "Dana Ashcroft", roleKeys: ["admin"], password: "preckon-2026" },
-  { email: "riya@cedarstone.build", name: "Riya Kapoor", roleKeys: ["admin"], password: "preckon-2026" },
+  { email: "dana@cedarstone.build", name: "Dana Ashcroft", roleKeys: ["admin"], password: ADMIN_PASSWORD },
+  { email: "riya@cedarstone.build", name: "Riya Kapoor", roleKeys: ["admin"], password: ADMIN_PASSWORD },
 ];
 
 /** Emails to deactivate if present — earlier demo identities, kept out of the
@@ -86,11 +105,13 @@ const ok = (r) => r.status >= 200 && r.status < 300;
 
   // 2) Authenticate. Prefer the Cedar & Stone owner; fall back to whoever the
   //    workspace was originally bootstrapped with.
+  /* No hard-coded fallback identity. The third candidate used to be a literal
+     email/password pair for another workspace entirely - a second published
+     credential, and one that would silently seed into the wrong tenant. */
   const candidates = [
-    { email: process.env.BOOTSTRAP_OWNER, password: process.env.BOOTSTRAP_PASSWORD ?? OWNER.password },
+    { email: process.env.BOOTSTRAP_OWNER, password: process.env.BOOTSTRAP_PASSWORD },
     { email: OWNER.email, password: OWNER.password },
-    { email: "owner@aigcc.group", password: "preckon-tenant-2026" },
-  ].filter((c) => c.email);
+  ].filter((c) => c.email && c.password);
 
   let signedInAs = null;
   for (const c of candidates) {
@@ -100,7 +121,7 @@ const ok = (r) => r.status >= 200 && r.status < 300;
   if (!signedInAs) {
     throw new Error(
       "Could not authenticate. Pass an existing owner:\n" +
-      "  BOOTSTRAP_OWNER=owner@aigcc.group BOOTSTRAP_PASSWORD=preckon-tenant-2026 node scripts/seed-cedarstone.mjs"
+      "  BOOTSTRAP_OWNER=<email> BOOTSTRAP_PASSWORD=<password> node scripts/seed-cedarstone.mjs"
     );
   }
   console.log(`signed in as ${signedInAs}`);

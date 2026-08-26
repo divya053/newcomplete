@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { uuidv7 } from "uuidv7";
 import { pool, query, queryOne, tx } from "./db";
 import { auth } from "./auth";
@@ -96,8 +97,17 @@ export async function bootstrapTenant(input: BootstrapInput): Promise<BootstrapR
     return { tenantId: input.tenantId, ownerEmail: email, ownerPassword: null, alreadyBootstrapped: true };
   }
 
-  // Owner credential in the tenant identity pool (separate from Host staff, §0.2).
-  const password = input.ownerPassword ?? "preckon-tenant-2026";
+  /* Owner credential in the tenant identity pool (separate from Host staff, §0.2).
+
+     This used to fall back to a hard-coded literal, so ANY tenant provisioned
+     without an explicit password silently received a credential that was
+     published in this repository — a production code path, not a demo script.
+
+     A caller that supplies no password now gets a unique random one, returned
+     once in BootstrapResult.ownerPassword and never logged. That is strictly
+     better than throwing: the endpoint keeps working, and the failure mode
+     stops being "every tenant shares one known password". */
+  const password = input.ownerPassword ?? randomBytes(24).toString("base64url");
   let authUserId: string;
   const existingAuth = await queryOne<{ id: string }>("SELECT id FROM `user` WHERE email = ?", [email]);
   if (existingAuth) {

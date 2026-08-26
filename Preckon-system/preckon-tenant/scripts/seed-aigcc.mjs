@@ -5,10 +5,31 @@
 //
 //   node scripts/seed-aigcc.mjs            (against http://localhost:3100)
 //
+/* Secrets come from the environment, and their absence is a hard stop.
+ *
+ * These used to default to a published literal, so running the script with no
+ * environment at all quietly provisioned a known password. A seed that invents
+ * a credential is indistinguishable from one that was configured properly,
+ * which is the whole problem. */
+function required(name, hint) {
+  const v = process.env[name];
+  if (!v) {
+    console.error(`\n${name} is not set.\n${hint}\n`);
+    process.exit(2);
+  }
+  return v;
+}
+
 const BASE = process.env.TENANT_URL ?? "http://localhost:3100";
-const TOKEN = process.env.INTERNAL_SERVICE_TOKEN ?? "change-me-service-token";
+const TOKEN = required("INTERNAL_SERVICE_TOKEN",
+  "It must match the value the tenant app runs with. A silent fallback here would\nauthenticate against nothing and fail later as a confusing 401.");
 const TENANT = "00000000-0000-7000-8000-0000000000a1";
-const OWNER = { email: "owner@aigcc.group", name: "Ade Bello", password: "preckon-tenant-2026" };
+const OWNER = {
+  email: process.env.SEED_OWNER_EMAIL ?? "owner@aigcc.group",   // a label, not a secret
+  name: "Ade Bello",
+  password: required("SEED_OWNER_PASSWORD",
+    "Choose the demo owner password for this environment, e.g.\n  SEED_OWNER_PASSWORD=... node scripts/seed-aigcc.mjs"),
+};
 
 let cookie = "";
 async function call(path, opts = {}) {
@@ -22,15 +43,20 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const ok = (r) => r.status >= 200 && r.status < 300;
 
 // ── Demo content (construction / AIGCC Group) ──────────────────────────────
+const ADMIN_PASSWORD = required("SEED_ADMIN_PASSWORD",
+  "Password for the seeded demo ADMIN accounts. These are privileged, so there is deliberately no default.");
+
 const USERS = [
   { email: "priya.nair@aigcc.group",  name: "Priya Nair",   roleKeys: ["precon_lead"] },
   { email: "marco.reyes@aigcc.group", name: "Marco Reyes",  roleKeys: ["estimator"] },
   { email: "sarah.chen@aigcc.group",  name: "Sarah Chen",   roleKeys: ["qs_reviewer"] },
   { email: "james.okafor@aigcc.group",name: "James Okafor", roleKeys: ["admin"] },
   { email: "lena.novak@aigcc.group",  name: "Lena Novak",   roleKeys: ["viewer"] },
-  // Demo admins with a known password (change in production).
-  { email: "shruthi@aigcc.group",     name: "Shruthi",      roleKeys: ["admin"], password: "preckon-2026" },
-  { email: "pranavi@aigcc.group",     name: "Pranavi",      roleKeys: ["admin"], password: "preckon-2026" },
+  // Demo admins. The password comes from SEED_ADMIN_PASSWORD; it used to be a
+  // second hard-coded literal here, on ADMIN accounts, and a substring search
+  // for the owner password never found it.
+  { email: "shruthi@aigcc.group",     name: "Shruthi",      roleKeys: ["admin"], password: ADMIN_PASSWORD },
+  { email: "pranavi@aigcc.group",     name: "Pranavi",      roleKeys: ["admin"], password: ADMIN_PASSWORD },
 ];
 
 const RATE_BOOK = [
@@ -197,5 +223,5 @@ async function drivePursuit(pid) {
 
   const verify = (await call("/api/v1/audit/verify")).body;
   console.log(`${"=".repeat(58)}\nAudit chain: ${JSON.stringify(verify)}`);
-  console.log(`\n✅ AIGCC Group ready — sign in: ${OWNER.email} / ${OWNER.password}\n`);
+  console.log(`\n✅ AIGCC Group ready — sign in as ${OWNER.email} with SEED_OWNER_PASSWORD\n`);
 })().catch((e) => { console.error("FATAL", e); process.exit(2); });
