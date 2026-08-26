@@ -3,15 +3,20 @@
 #   docker compose up --build -d          # db + phpMyAdmin + app + worker
 #   docker compose run --rm seed          # register the pack + demo tenant/owner
 #
-# App:        http://localhost:3100   (login admin@techsme.com / preckon-admin-2026)
-# phpMyAdmin: http://localhost:8081    (server: db, user: root, pass: preckon)
+# App:        http://localhost:3100   (credentials come from .env, not from here)
+# phpMyAdmin: http://localhost:8081    (server: db, user: root, pass: DATABASE_PASSWORD)
 # MySQL:      localhost:3308 -> 3306
 services:
   db:
     image: mysql:8.0
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${DATABASE_PASSWORD:-preckon}
+      # :? not :-. This defaulted to 'preckon', so a stack brought up without a
+      # .env silently ran on a password published in this repository - and the
+      # same default appeared on the db, phpMyAdmin, the app and the seeder, so
+      # all four agreed and nothing looked wrong. Failing to start is the
+      # correct outcome for a missing database password.
+      MYSQL_ROOT_PASSWORD: ${DATABASE_PASSWORD:?set DATABASE_PASSWORD in .env}
       MYSQL_DATABASE: ${DATABASE_NAME:-preckon_tenant}
     ports:
       # Loopback only. Published so a developer can point a client at 3308;
@@ -44,7 +49,7 @@ services:
       PMA_HOST: db
       PMA_PORT: 3306
       PMA_USER: root
-      PMA_PASSWORD: ${DATABASE_PASSWORD:-preckon}
+      PMA_PASSWORD: ${DATABASE_PASSWORD:?set DATABASE_PASSWORD in .env}
       UPLOAD_LIMIT: 64M
     ports:
       - "127.0.0.1:8081:80"
@@ -107,7 +112,7 @@ services:
       DATABASE_HOST: db
       DATABASE_PORT: "3306"
       DATABASE_USER: root
-      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-preckon}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?set DATABASE_PASSWORD in .env}
       DATABASE_NAME: preckon_tenant
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET in .env (32+ random chars)}
       BETTER_AUTH_URL: http://localhost:3100
@@ -145,7 +150,7 @@ services:
       DATABASE_HOST: db
       DATABASE_PORT: "3306"
       DATABASE_USER: root
-      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-preckon}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?set DATABASE_PASSWORD in .env}
       DATABASE_NAME: preckon_tenant
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET in .env (32+ random chars)}
       BETTER_AUTH_URL: http://localhost:3100
