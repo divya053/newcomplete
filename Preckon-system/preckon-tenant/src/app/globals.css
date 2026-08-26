@@ -147,8 +147,14 @@ a{color:inherit; text-decoration:none;}
   color:color-mix(in srgb, var(--ink) 26%, transparent);
 }
 .login-bgmark svg{
-  display:block; height:clamp(150px,34vh,380px); width:auto;
+  /* The full lockup is wide (268:56), so it is sized off viewport WIDTH — the
+     mark alone was tall and sized off height. */
+  display:block; width:clamp(230px,29vw,430px); height:auto;
 }
+/* Match the card's wordmark rather than the asset's 'General Sans', which is
+   not loaded here: an SVG <text> with a missing family falls back silently and
+   the lockup would render in a different face from the one on the card. */
+.login-bgmark text{font-family:var(--font-display); }
 /* Full brand strength, with a glow so it reads as lit rather than printed. */
 .login-bgmark .o{
   fill:var(--brand);
@@ -163,7 +169,7 @@ a{color:inherit; text-decoration:none;}
 /* Below ~900px the mark and the card compete for the same band, so it steps
    back rather than sitting behind the form fields. */
 @media (max-width:900px){
-  .login-bgmark svg{height:clamp(96px,20vh,150px);}
+  .login-bgmark svg{width:clamp(170px,34vw,240px);}
   .login-bgmark{color:color-mix(in srgb, var(--ink) 16%, transparent);}
 }
 /* Below the card's own width the mark would sit behind the form and fight the
