@@ -7,7 +7,13 @@ import { test, expect, type Page } from "@playwright/test";
 // mode this file exists to catch.
 
 const EMAIL = process.env.E2E_EMAIL ?? "owner@cedarstone.build";
-const PASSWORD = process.env.E2E_PASSWORD ?? "preckon-tenant-2026";
+const PASSWORD = (() => {
+  // No committed default. The seed no longer creates a fixed password, so a
+  // literal here would be both a published credential and simply wrong.
+  const v = process.env.E2E_PASSWORD;
+  if (!v) throw new Error("E2E_PASSWORD is not set. Use the same value the seed was run with.");
+  return v;
+})();
 // The project is found by navigating, not hard-coded.
 //
 // This used to default to a literal uuid — 019fb44e-982b-79aa-b701-0e21855fb266

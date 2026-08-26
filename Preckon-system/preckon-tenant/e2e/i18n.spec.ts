@@ -5,7 +5,13 @@ import { test, expect, type Page } from "@playwright/test";
 // the numbers are formatted for that locale.
 
 const EMAIL = process.env.E2E_EMAIL ?? "owner@aigcc.group";
-const PASSWORD = process.env.E2E_PASSWORD ?? "preckon-tenant-2026";
+const PASSWORD = (() => {
+  // No committed default. The seed no longer creates a fixed password, so a
+  // literal here would be both a published credential and simply wrong.
+  const v = process.env.E2E_PASSWORD;
+  if (!v) throw new Error("E2E_PASSWORD is not set. Use the same value the seed was run with.");
+  return v;
+})();
 
 async function signIn(page: Page) {
   await page.goto("/login");
