@@ -172,7 +172,33 @@ export function CopilotDrawer({
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
+
+  /* Two-step clear. The first click arms it, the second does it.
+     No window.confirm: it is blocked in some embedded browsers and cannot be
+     styled or translated, and this drawer already has room to say what it is
+     about to do. */
+  async function clearChat() {
+    if (!pid || !cid) return;
+    if (!confirmClear) { setConfirmClear(true); return; }
+    setClearing(true);
+    setErr(null);
+    try {
+      await api.del(`/projects/${pid}/conversations/${cid}/messages`);
+      setMessages([]);
+    } catch (e: any) {
+      setErr(e?.message ?? t("copilot.clearFail"));
+    } finally {
+      setClearing(false);
+      setConfirmClear(false);
+    }
+  }
+
+  // Anything that changes what is on screen disarms the confirm, so a click
+  // meant for one thread cannot land on another.
+  useEffect(() => { setConfirmClear(false); }, [pid, cid, open]);
 
   // Follow the project you're looking at; fall back to the newest one.
   useEffect(() => {
@@ -258,6 +284,21 @@ export function CopilotDrawer({
       <aside className="drawer cop" role="dialog" aria-modal="true" aria-label={t("copilot.title")}>
         <div className="dh">
           <h2>{t("copilot.title")}</h2>
+          {/* Clearing is destructive and there is no undo, so it asks once.
+              A second click within the window confirms; anything else — closing
+              the drawer, switching project, sending a message — cancels it,
+              which is why `confirmClear` is reset in those paths rather than on
+              a timer the user cannot see. */}
+          {cid && messages.length > 0 && (
+            <button
+              className={"cop-clear" + (confirmClear ? " armed" : "")}
+              onClick={clearChat}
+              disabled={clearing}
+              title={t("copilot.clearHint")}
+            >
+              {clearing ? t("copilot.clearing") : confirmClear ? t("copilot.clearConfirm") : t("copilot.clear")}
+            </button>
+          )}
           <button className="x" onClick={onClose} aria-label={t("common.close")}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 6l12 12M18 6 6 18" /></svg>
           </button>

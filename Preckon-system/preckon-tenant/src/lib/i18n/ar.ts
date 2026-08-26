@@ -78,6 +78,11 @@ export const ar: Dict = {
   "copilot.placeholder": "اسأل المساعد…",
   "copilot.noProjectSelected": "لم يتم اختيار مشروع",
   "copilot.send": "إرسال",
+  "copilot.clear": "مسح",
+  "copilot.clearConfirm": "مسح الكل؟",
+  "copilot.clearing": "جارٍ المسح…",
+  "copilot.clearHint": "حذف جميع الرسائل في هذه المحادثة. لا يمكن التراجع.",
+  "copilot.clearFail": "تعذّر مسح المحادثة",
   "copilot.openFail": "تعذّر فتح المساعد",
   "copilot.sendFail": "تعذّر الإرسال",
 

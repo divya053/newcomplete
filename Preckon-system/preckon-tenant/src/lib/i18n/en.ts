@@ -77,6 +77,11 @@ export const en = {
   "copilot.placeholder": "Ask Copilot…",
   "copilot.noProjectSelected": "No project selected",
   "copilot.send": "Send",
+  "copilot.clear": "Clear",
+  "copilot.clearConfirm": "Clear all?",
+  "copilot.clearing": "Clearing…",
+  "copilot.clearHint": "Delete every message in this thread. This cannot be undone.",
+  "copilot.clearFail": "Couldn’t clear this thread",
   "copilot.openFail": "Couldn’t open Copilot",
   "copilot.sendFail": "Couldn’t send",
 

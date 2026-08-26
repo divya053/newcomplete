@@ -79,6 +79,11 @@ export const fr: Dict = {
   "copilot.placeholder": "Demander au copilote…",
   "copilot.noProjectSelected": "Aucun projet sélectionné",
   "copilot.send": "Envoyer",
+  "copilot.clear": "Effacer",
+  "copilot.clearConfirm": "Tout effacer ?",
+  "copilot.clearing": "Effacement…",
+  "copilot.clearHint": "Supprimer tous les messages de ce fil. Action irréversible.",
+  "copilot.clearFail": "Impossible d’effacer ce fil",
   "copilot.openFail": "Impossible d’ouvrir le copilote",
   "copilot.sendFail": "Envoi impossible",
 
