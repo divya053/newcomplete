@@ -56,9 +56,14 @@ export default function LoginPage() {
           {err && <div className="auth-err"><span>{err}</span></div>}
           <button className="btn btn-primary btn-block" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
         </form>
+        {/* No credential panel. This printed "Demo tenant owner · <email> /
+            <password>" — a working sign-in handed to anyone who loaded the page.
+            The email survives as a prefill in the field above, which is a
+            convenience; naming the account here as well only advertises which
+            one to attack, and the password never belonged on screen at all. */}
         <div className="restricted">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="10" width="16" height="10" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg>
-          {DEMO_IDENTITY ? `Demo tenant owner · ${DEMO_IDENTITY}` : "Restricted workspace"}
+          Restricted workspace
         </div>
       </div>
     </div>
