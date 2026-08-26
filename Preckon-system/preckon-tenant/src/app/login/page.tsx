@@ -37,19 +37,27 @@ export default function LoginPage() {
 
   return (
     <div className="login-wrap">
-      {/* Brand mark in the page background, behind the card.
+      {/* The brand mark itself, behind the card — the symbol from
+          assets/preckon-mark.svg rather than the wordmark set as text.
 
-          dir="ltr" is on the INNER span, not the container, and the split
-          matters. Logical properties resolve against the element's own
-          direction, so putting dir="ltr" on the positioned container pinned
-          inset-inline-end to the right and the mark stayed on the right side in
-          Arabic instead of mirroring. The container inherits the page direction
-          so it moves; the span pins the glyph order so the trailing period does
-          not reorder into ".Preckon".
+          Inlined instead of an <img> so the two parts can be themed
+          independently: the P takes currentColor and recedes with the
+          background, while the dot stays at full brand strength. An <img>
+          would carry its own baked-in #0B1B2B and go invisible on the dark
+          ground.
 
           aria-hidden — the card already carries the name as real content. */}
       <div className="login-bgmark" aria-hidden="true">
-        <span dir="ltr">Preckon<span className="o">.</span></span>
+        <svg viewBox="0 0 48 56" fill="none">
+          <path
+            d="M16 50V8h14a13 13 0 0 1 0 26H16"
+            stroke="currentColor"
+            strokeWidth="7"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <circle className="o" cx="25" cy="21" r="3.6" />
+        </svg>
       </div>
       <div className="login">
         <div className="brand">
