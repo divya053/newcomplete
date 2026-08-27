@@ -19,20 +19,34 @@ const money = (minor: number, cur = "USD") =>
 const num = (n: number) => new Intl.NumberFormat().format(Math.round(n ?? 0));
 
 /** 12345 → 12.3k. Token counts are read for magnitude, not to the digit. */
+/** "2026-08" → "August 2026", in the reader's own locale. */
+const monthLabel = (ym: string) => {
+  const [y, m] = ym.split("-").map(Number);
+  return new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" })
+    .format(new Date(y, (m ?? 1) - 1, 1));
+};
+
 const compact = (n: number) =>
   new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(n ?? 0);
 
 export default function UsageAdmin() {
   const { t } = useI18n();
   const [tick, setTick] = useState(0);
-  const usage = useApi<any>(`/usage?t=${tick}`);
+  /* "" = this month. A YYYY-MM pins a past one; "all" is since the beginning. */
+  const [period, setPeriod] = useState("");
+  const usage = useApi<any>(`/usage?t=${tick}${period ? `&month=${period}` : ""}`);
+
+  /* Only the current month moves under you. Polling a finished one re-fetches
+     numbers that cannot change, so the timer stops when you look back. */
+  const live = period === "";
 
   // 15s. Fast enough that "running now" means now; slow enough that a page left
   // open on a wall display is not a load generator of its own.
   useEffect(() => {
+    if (!live) return;
     const id = setInterval(() => setTick((n) => n + 1), 15_000);
     return () => clearInterval(id);
-  }, []);
+  }, [live]);
 
   if (usage.loading && !usage.data) return <Skeleton rows={6} />;
   if (usage.error) return <div className="card"><p className="csub">{String(usage.error)}</p></div>;
@@ -53,6 +67,27 @@ export default function UsageAdmin() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+      {/* ── Which period. The page answered only "this month", which is not the
+             question someone signing off a bill asks. ──────────────────────── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <span className="sl">{t("usage.period")}</span>
+        <select
+          className="mono"
+          value={period}
+          onChange={(e) => setPeriod(e.target.value)}
+          aria-label={t("usage.period")}
+          style={{ fontSize: 12, padding: "6px 10px", border: "1px solid var(--hairline)",
+                   borderRadius: 7, background: "var(--panel-2)", color: "var(--ink)" }}
+        >
+          <option value="">{t("usage.thisMonth")}</option>
+          {(d.months ?? [])
+            .filter((m: any) => m.ym !== new Date().toISOString().slice(0, 7))
+            .map((m: any) => <option key={m.ym} value={m.ym}>{monthLabel(m.ym)}</option>)}
+          <option value="all">{t("usage.allTime")}</option>
+        </select>
+        {!live && <span className="chip">{t("usage.historic")}</span>}
+      </div>
 
       {/* ── The four numbers someone opens this page for ─────────────────── */}
       <div className="kpis">
@@ -117,6 +152,40 @@ export default function UsageAdmin() {
         {/* ∅ needs saying once rather than being guessed at. */}
         <div className="csub" style={{ marginTop: 10 }}>{t("usage.emptyLegend")}</div>
       </div>
+
+      {/* ── Month by month. The breakdown the picker indexes, and a trend on
+             its own — one row per month that had any usage. ───────────────── */}
+      {(d.months ?? []).length > 1 && (
+        <div className="card" style={{ padding: "14px 18px" }}>
+          <div className="chead"><div>
+            <h2>{t("usage.byMonth")}</h2>
+            <div className="csub">{t("usage.byMonthSub")}</div>
+          </div></div>
+          <table style={{ marginTop: 8 }}>
+            <thead><tr>
+              <th>{t("usage.colMonth")}</th>
+              <th className="r">{t("usage.colCalls")}</th>
+              <th className="r">{t("usage.colTokens")}</th>
+              <th className="r">{t("usage.colFailed")}</th>
+              <th className="r">{t("usage.colCost")}</th>
+            </tr></thead>
+            <tbody>
+              {d.months.map((m: any) => (
+                <tr key={m.ym}
+                    className={m.ym === (d.period?.month ?? new Date().toISOString().slice(0, 7)) ? "flagged" : ""}
+                    onClick={() => setPeriod(m.ym === new Date().toISOString().slice(0, 7) ? "" : m.ym)}
+                    style={{ cursor: "pointer" }}>
+                  <td className="t-name">{monthLabel(m.ym)}</td>
+                  <td className="r num">{num(m.calls)}</td>
+                  <td className="r num">{compact(m.tokens)}</td>
+                  <td className="r num">{Number(m.failed) ? num(m.failed) : "—"}</td>
+                  <td className="r num">{money(m.cost_minor)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* ── The bill, per project ───────────────────────────────────────── */}
       <div className="card" style={{ padding: "14px 18px" }}>

@@ -20,13 +20,40 @@ async function safe<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
   try { return await fn(); } catch { return fallback; }
 }
 
-export const GET = route(async (_req, ctx) => {
+export const GET = route(async (req, ctx) => {
   // billing.view, not admin.settings: this is spend, and the person who needs
   // to see a bill is not always the person who administers the workspace.
   requirePermission(ctx, "billing.view");
   const T = ctx.tenantId;
 
-  const [live, month, byStep, byProject, waste, recent] = await Promise.all([
+  /* Which month, as YYYY-MM. Defaults to the current one.
+     Validated by shape rather than trusted: it is interpolated into a date
+     literal, and "whatever the query string said" is not something to hand to
+     MySQL. Anything that is not exactly YYYY-MM falls back to this month.
+
+     "all" widens to every row the tenant has, for the question "what have we
+     spent since we started" that a month view cannot answer. */
+  const raw = new URL(req.url).searchParams.get("month") ?? "";
+  const allTime = raw === "all";
+  const wantMonth = /^\d{4}-(0[1-9]|1[0-2])$/.test(raw) ? raw : null;
+
+  /* Bounded at BOTH ends. The original filter was `>= start of this month` with
+     no upper bound, which is the same thing only while the month you are asking
+     about is the current one — for any earlier month it would have swept every
+     later row in with it. */
+  const from = allTime ? "'1970-01-01'" : wantMonth ? `'${wantMonth}-01'` : "DATE_FORMAT(CURDATE(), '%Y-%m-01')";
+  const to = allTime
+    ? "DATE_ADD(CURDATE(), INTERVAL 1 DAY)"
+    : wantMonth
+      ? `DATE_ADD('${wantMonth}-01', INTERVAL 1 MONTH)`
+      : "DATE_ADD(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 1 MONTH)";
+  const period = `created_at >= ${from} AND created_at < ${to}`;
+  const uPeriod = `u.created_at >= ${from} AND u.created_at < ${to}`;
+  /* A past month is finished, so its "projection" is simply what it cost. Only
+     the current month is part-elapsed and worth extrapolating. */
+  const isCurrent = !allTime && !wantMonth;
+
+  const [live, month, byStep, byProject, waste, recent, months] = await Promise.all([
     // ── Running now. From ai_job, because a queued job has no ledger row yet:
     //    the ledger records what an attempt COST, and this one has not run.
     safe(() => queryOne<any>(
@@ -51,7 +78,7 @@ export const GET = route(async (_req, ctx) => {
          DAY(LAST_DAY(CURDATE()))                    AS days_in_month,
          DAY(CURDATE())                              AS day_of_month
        FROM ai_usage_ledger
-       WHERE tenant_id = ? AND created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')`, [T]), null),
+       WHERE tenant_id = ? AND ${period}`, [T]), null),
 
     // ── Per step. execution_class is grouped, not summed away: a stub row
     //    carries token counts and costs nothing, so folding it in with real
@@ -69,7 +96,7 @@ export const GET = route(async (_req, ctx) => {
               COALESCE(SUM(validation_status = 'no_outputs'), 0) AS empty_answers,
               ROUND(AVG(confidence), 3)         AS conf_avg
          FROM ai_usage_ledger
-        WHERE tenant_id = ? AND created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+        WHERE tenant_id = ? AND ${period}
         GROUP BY module, task_type, execution_class
         ORDER BY cost_minor DESC, calls DESC
         LIMIT 60`, [T]), []),
@@ -82,7 +109,7 @@ export const GET = route(async (_req, ctx) => {
               COALESCE(SUM(u.outcome <> 'succeeded'), 0) AS failed
          FROM ai_usage_ledger u
          JOIN project p ON p.id = u.project_id AND p.tenant_id = u.tenant_id
-        WHERE u.tenant_id = ? AND u.created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+        WHERE u.tenant_id = ? AND ${uPeriod}
         GROUP BY p.id, p.name, p.code
         ORDER BY cost_minor DESC LIMIT 40`, [T]), []),
 
@@ -96,7 +123,7 @@ export const GET = route(async (_req, ctx) => {
               COALESCE(SUM(input_tokens + output_tokens), 0) AS tokens
          FROM ai_usage_ledger
         WHERE tenant_id = ?
-          AND created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+          AND ${period}
           AND (outcome <> 'succeeded' OR validation_status = 'no_outputs')
         GROUP BY task_type, reason
         ORDER BY tokens DESC LIMIT 30`, [T]), []),
@@ -109,6 +136,21 @@ export const GET = route(async (_req, ctx) => {
          LEFT JOIN project p ON p.id = u.project_id AND p.tenant_id = u.tenant_id
         WHERE u.tenant_id = ?
         ORDER BY u.created_at DESC LIMIT 40`, [T]), []),
+
+    /* Every month that has any usage, newest first. Drives the picker and is
+       the month-by-month breakdown in its own right — the page could answer
+       "what is this costing" and not "what has it cost us", which is the
+       question anyone signing off a bill actually asks. Deliberately NOT
+       period-filtered: it is the index of periods. */
+    safe(() => query<any>(
+      `SELECT DATE_FORMAT(created_at, '%Y-%m')          AS ym,
+              COUNT(*)                                  AS calls,
+              COALESCE(SUM(input_tokens + output_tokens), 0) AS tokens,
+              COALESCE(SUM(cost_minor), 0)              AS cost_minor,
+              COALESCE(SUM(outcome <> 'succeeded'), 0)  AS failed
+         FROM ai_usage_ledger
+        WHERE tenant_id = ?
+        GROUP BY ym ORDER BY ym DESC LIMIT 24`, [T]), []),
   ]);
 
   const days = Number(month?.days_in_month ?? 30);
@@ -129,10 +171,14 @@ export const GET = route(async (_req, ctx) => {
       cacheHits: Number(month?.cache_hits ?? 0),
       failed: Number(month?.failed ?? 0),
       /* Linear on elapsed days. Stated as projected, never as forecast. */
-      projectedCostMinor: Math.round((spent / today) * days),
+      /* A finished month needs no extrapolation — its projection is what it
+         cost. Only the current one is part-elapsed. */
+      projectedCostMinor: isCurrent ? Math.round((spent / today) * days) : spent,
       dayOfMonth: today,
       daysInMonth: days,
     },
+    period: { month: wantMonth, allTime, isCurrent },
+    months: months ?? [],
     byStep: byStep ?? [],
     byProject: byProject ?? [],
     waste: waste ?? [],
