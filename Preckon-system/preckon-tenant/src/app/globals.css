@@ -619,8 +619,13 @@ td.num{font-family:var(--font-mono); color:var(--ink);}
 .prog.lg{height:8px;}
 .stage{font-family:var(--font-mono); font-size:10.5px; color:var(--slate-600); background:var(--panel-2); border:1px solid var(--hairline);
   border-radius:6px; padding:3px 8px; white-space:nowrap;}
-.trow-lbl{font-size:12.5px; color:var(--slate-500); display:flex; justify-content:space-between; gap:12px; padding:9px 0; border-top:1px solid var(--hairline);}
-.trow-lbl b{color:var(--ink); font-weight:600; text-align:end;}
+/* align-items:baseline so a wrapped multi-line value keeps its first line level
+   with the label instead of centring the whole block against it. */
+.trow-lbl{font-size:12.5px; color:var(--slate-500); display:flex; justify-content:space-between; align-items:baseline; gap:14px; padding:9px 0; border-top:1px solid var(--hairline);}
+/* min-width:0 lets the VALUE wrap, and it is the only thing that should: the
+   label is an anonymous flex item and must keep its intrinsic width, or a long
+   submission-format paragraph starves it. */
+.trow-lbl b{color:var(--ink); font-weight:600; text-align:end; min-width:0; flex:1 1 auto;}
 
 /* ---------- PROJECT WORKSPACE: header, chain tabs, stepper ---------- */
 .pw-back{display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:var(--slate-500); font-weight:600; cursor:pointer; margin-bottom:12px; background:none; border:0;}
@@ -1253,7 +1258,14 @@ input[type=color]{width:46px; height:34px; border:1px solid var(--hairline); bor
    page then scrolls horizontally on a phone and every sticky element drifts.
    min-width:0 lets the track win; overflow-wrap breaks the string. */
 .app > *,.content,.card,.tw,.row,.two-col{min-width:0;}
-td,.csub,.cname,.t-name,.trow-lbl{overflow-wrap:anywhere;}
+/* break-word, NOT anywhere.
+   Both break a word too long for its line, but `anywhere` also collapses the
+   element's min-content width to one character. In a flex row that lets a long
+   value squeeze its label to nothing, and the label then breaks per character:
+   "Client" rendered as Cli/ent and "Format" as Fo/rm/at in the tender Key facts
+   panel. `break-word` keeps min-content at the longest word, so a label holds
+   its own width and only genuinely oversized strings — ids, urls — still wrap. */
+td,.csub,.cname,.t-name,.trow-lbl{overflow-wrap:break-word;}
 svg,img{max-width:100%;}
 
 /* ── strips scroll, they do not wrap ───────────────────────────────────────

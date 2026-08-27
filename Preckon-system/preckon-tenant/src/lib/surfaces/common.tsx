@@ -96,15 +96,45 @@ export function StageHeader({
   const mineKeys = new Set(mine.map((w) => w.key));
   const active = runs.find((r) => mineKeys.has(r.workflow_key) && (r.status === "running" || r.status === "awaiting_review"));
 
+  /**
+   * Run, and re-run.
+   *
+   * Run used to be disabled whenever any workflow of this module was running or
+   * awaiting_review. That is right for a run genuinely in flight and wrong for a
+   * parked one: a gate with nothing pending shows "paused — waiting on you" over
+   * a panel offering nothing to confirm, and with Run disabled too there was no
+   * control on the page that could clear it. Thirty-nine runs were parked that
+   * way on production, the oldest for four weeks.
+   *
+   * So a parked run is now cancelled and replaced rather than blocking. A
+   * genuinely running one still blocks — starting a second is how a project ends
+   * up with two concurrent QuantLogix runs six seconds apart, which is also on
+   * production.
+   */
   async function start(key: string) {
     if (!key) return;
     setBusy(true);
-    try { await api.post(`/projects/${pid}/runs`, { workflow_key: key }); toast(t("toast.runStarted")); reload(); }
+    try {
+      if (active?.status === "awaiting_review") {
+        await api.post(`/projects/${pid}/runs/${active.id}/cancel`, {});
+      }
+      await api.post(`/projects/${pid}/runs`, { workflow_key: key });
+      toast(t("toast.runStarted"));
+      reload();
+    }
     catch (e: any) { toast(e?.message ?? t("toast.runFail")); }
     finally { setBusy(false); }
   }
 
-  const selected = choice || mine[0]?.key || "";
+  /* The module's own workflow is the default, not whichever sorts first.
+     mine[0] put BidAssembly at the top of the TenderLogix picker, so the obvious
+     action — press Run on the Tender stage — started bid assembly instead of
+     reading the tender, and nothing about the screen said so. */
+  const primary = mine.find((w) => w.key === `workflow.${stage.key}`)?.key;
+  const selected = choice || primary || mine[0]?.key || "";
+
+  /* Blocked only by a run actually in flight. A parked one is cleared by start(). */
+  const blocked = busy || active?.status === "running";
 
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
