@@ -883,11 +883,31 @@ input[type=color]{width:46px; height:34px; border:1px solid var(--hairline); bor
 @media(max-width:1000px){ .bim-wrap{grid-template-columns:1fr;} }
 .bim-main{border:1px solid var(--hairline); border-radius:14px; overflow:hidden; background:var(--surface);}
 .bim-bar{display:flex; align-items:center; gap:10px; padding:9px 12px; border-bottom:1px solid var(--hairline);}
-.bim-canvas{height:560px; background:var(--panel-2);}
+/* One number, used by the canvas and by the cap on the panel beside it, so the
+   two cannot drift apart. */
+:root{ --bim-canvas-h:560px; --bim-bar-h:44px; }
+.bim-canvas{height:var(--bim-canvas-h); background:var(--panel-2);}
 .bim-canvas svg{width:100%; height:100%; display:block;}
 /* A plan is a plan: never mirrored, even in RTL. */
 [dir="rtl"] .bim-canvas{direction:ltr;}
 .bim-side{border:1px solid var(--hairline); border-radius:14px; background:var(--surface); padding:16px; height:fit-content;}
+
+/* The Measured panel scrolls instead of setting the height of the whole row.
+   It was height:fit-content with no ceiling, and on a real floor plan it holds
+   a block count per block and a line per layer — comfortably past 2000px. Grid
+   rows take the height of their tallest child, so the drawing pane stretched to
+   match it while its canvas stayed fixed at 560px, and the difference showed as
+   several screens of empty panel.
+
+   Capped to the pane beside it, so the row is now the drawing's height and the
+   list scrolls within it. align-self:start keeps it from stretching back out. */
+.bim-wrap:not(:has(> .split-handle)) .bim-side{
+  height:auto;
+  max-height:calc(var(--bim-canvas-h) + var(--bim-bar-h));
+  overflow-y:auto;
+  align-self:start;
+  overscroll-behavior:contain;
+}
 .bim-side h4{font-family:var(--font-display); font-weight:600; font-size:13px; color:var(--ink); margin:0 0 10px;}
 .bim-leg{margin-bottom:12px;}
 .bim-leg-h{background:none; border:0; padding:0 0 4px; cursor:pointer; font-family:var(--font-mono); font-size:9.5px;
