@@ -91,6 +91,7 @@ async function gateResolved(
   if (!gateTypes || gateTypes.length === 0) return false;
   let pendingRemains = false;
   let hasConfirmed = false;
+  let anyAtAll = false;
   for (const t of gateTypes) {
     const pending = await queryOne<{ n: number }>(
       `SELECT COUNT(*) AS n FROM artifact
@@ -102,12 +103,31 @@ async function gateResolved(
         WHERE tenant_id = ? AND source_run_id = ? AND ${typeMatchSql("type_key", t).sql} AND status = 'confirmed'`,
       [tenantId, runId, ...typeMatchSql("type_key", t).params]
     );
+    const any = await queryOne<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM artifact
+        WHERE tenant_id = ? AND source_run_id = ? AND ${typeMatchSql("type_key", t).sql}`,
+      [tenantId, runId, ...typeMatchSql("type_key", t).params]
+    );
     if (Number(pending?.n ?? 0) > 0) pendingRemains = true;
     if (Number(confirmed?.n ?? 0) > 0) hasConfirmed = true;
+    if (Number(any?.n ?? 0) > 0) anyAtAll = true;
   }
   // allowEmpty (autopilot): nothing pending is enough — a gate over a producer
   // that legitimately emitted no artifacts must not stall the automatic pursuit.
-  return !pendingRemains && (hasConfirmed || allowEmpty);
+  //
+  // anyAtAll covers the same hole on a MANUAL run, and it has to, because a
+  // manual run had no way out of it at all. A producer that emitted nothing
+  // left pendingRemains false and hasConfirmed false, so the gate could never
+  // open — and with nothing pending there was nothing on screen for a person to
+  // confirm either. The stage sat on "paused — waiting on you" above a panel
+  // reading "0 records to confirm", and the only fix was to cancel the run.
+  //
+  // Deliberately narrower than allowEmpty: this opens the gate only when the run
+  // produced NO artifacts of these types at all. If it produced some and a person
+  // rejected every one, anyAtAll stays true and the gate still holds — that was a
+  // human decision about real output, and it is not the same as having nothing to
+  // decide.
+  return !pendingRemains && (hasConfirmed || allowEmpty || !anyAtAll);
 }
 
 async function projectAutopilot(tenantId: string, projectId: string): Promise<boolean> {
