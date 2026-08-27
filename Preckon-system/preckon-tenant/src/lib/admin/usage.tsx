@@ -37,8 +37,14 @@ export default function UsageAdmin() {
   const usage = useApi<any>(`/usage?t=${tick}${period ? `&month=${period}` : ""}`);
 
   /* Only the current month moves under you. Polling a finished one re-fetches
-     numbers that cannot change, so the timer stops when you look back. */
-  const live = period === "";
+     numbers that cannot change, so the timer stops when you look back.
+
+     All-time is NOT finished — it contains the current month and is still
+     accumulating — so it keeps polling and is never labelled closed. Treating
+     "not this month" as "closed" put a "closed period" chip on a running total. */
+  const isAllTime = period === "all";
+  const isPastMonth = period !== "" && !isAllTime;
+  const live = period === "" || isAllTime;
 
   // 15s. Fast enough that "running now" means now; slow enough that a page left
   // open on a wall display is not a load generator of its own.
@@ -86,7 +92,7 @@ export default function UsageAdmin() {
             .map((m: any) => <option key={m.ym} value={m.ym}>{monthLabel(m.ym)}</option>)}
           <option value="all">{t("usage.allTime")}</option>
         </select>
-        {!live && <span className="chip">{t("usage.historic")}</span>}
+        {isPastMonth && <span className="chip">{t("usage.historic")}</span>}
       </div>
 
       {/* ── The four numbers someone opens this page for ─────────────────── */}
@@ -96,8 +102,17 @@ export default function UsageAdmin() {
              warn={d.live.oldestWaitSeconds > 300} />
         <Kpi label={t("usage.spentMonth")} value={money(d.month.costMinor)}
              sub={t("usage.callsN", { n: num(d.month.calls) })} />
-        <Kpi label={t("usage.projected")} value={money(d.month.projectedCostMinor)}
-             sub={t("usage.projectedSub", { day: d.month.dayOfMonth, days: d.month.daysInMonth })} />
+        {/* A projection only means something for a part-elapsed period. On a
+            finished month the API returns the actual, so calling it "projected"
+            would dress a final figure up as an estimate. */}
+        <Kpi
+          label={isPastMonth ? t("usage.finalTotal") : t("usage.projected")}
+          value={money(d.month.projectedCostMinor)}
+          sub={isPastMonth
+            ? t("usage.finalTotalSub")
+            : isAllTime
+              ? t("usage.allTimeSub")
+              : t("usage.projectedSub", { day: d.month.dayOfMonth, days: d.month.daysInMonth })} />
         <Kpi label={t("usage.wasted")} value={wasteValue}
              sub={t("usage.wastedSub", { n: num(wasteCalls), pct: failRate })}
              warn={wasteCalls > 0} />
