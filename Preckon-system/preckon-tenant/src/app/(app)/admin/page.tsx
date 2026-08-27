@@ -9,12 +9,14 @@ import { useWorkspace } from "@/lib/appctx";
 import { applyBrand, saveBrand, readBrand, BRAND_SWATCHES, BRAND_DEFAULT } from "@/lib/brand";
 import { useProjectBundles } from "@/lib/bundles";
 import TeamAdmin from "@/lib/admin/team";
+import UsageAdmin from "@/lib/admin/usage";
 import { LOCALES, useI18n, type Key, type Locale } from "@/lib/i18n";
 
 const TABS: { key: string; label: Key }[] = [
   { key: "team", label: "admin.tabTeam" },
   { key: "branding", label: "admin.tabBranding" },
   { key: "plan", label: "admin.tabPlan" },
+  { key: "usage", label: "admin.tabUsage" },
 ];
 
 export default function AdminPage() {
@@ -30,7 +32,7 @@ export default function AdminPage() {
           <button key={x.key} className={tab === x.key ? "on" : ""} onClick={() => setTab(x.key)}>{t(x.label)}</button>
         ))}
       </nav>
-      {tab === "team" ? <TeamAdmin /> : tab === "branding" ? <Branding /> : <Plan />}
+      {tab === "team" ? <TeamAdmin /> : tab === "branding" ? <Branding /> : tab === "usage" ? <UsageAdmin /> : <Plan />}
     </>
   );
 }
