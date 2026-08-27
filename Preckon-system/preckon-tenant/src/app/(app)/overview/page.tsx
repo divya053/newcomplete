@@ -81,7 +81,11 @@ export default function DashboardPage() {
                 : t("dash.waiting", { n: totals.pending, bids: bidsWaiting })}
           </p>
         </div>
-        <button className="mini pri" onClick={() => router.push("/projects?new=1")}>{t("shell.newProject")}</button>
+        {/* The sidebar's New project button is on every screen, including this
+            one, so a second identical primary button in the page head read as a
+            mistake. The one inside the empty state below stays: with no projects
+            at all there is nothing else to do, and that is a call to action
+            rather than a duplicate. */}
       </div>
 
       <div className="kpis">

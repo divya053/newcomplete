@@ -105,8 +105,10 @@ function ProjectsInner() {
   return (
     <>
       <div className="page-head">
+        {/* No New project button here: the sidebar carries one on every screen,
+           and two identical primary buttons a few centimetres apart read as a
+           mistake rather than as convenience. */}
         <div><h1>{t("projects.title")}</h1><p>{t("projects.sub")}</p></div>
-        {canCreate && <button className="mini pri" onClick={() => setOpen(true)}><Icon.add /> {t("shell.newProject")}</button>}
       </div>
 
       <div className="fbar">
@@ -184,7 +186,7 @@ function ProjectsInner() {
           </div>
         )}
 
-      <ArchivedProjects onRestored={reload} />
+      <ArchivedProjects onRestored={reload} q={q} />
 
       <Drawer
         open={open} title={t("newProject.title")} onClose={() => setOpen(false)}
@@ -221,15 +223,31 @@ function ProjectsInner() {
  * It renders nothing at all when nothing is archived, so a clean workspace is
  * not given a permanently empty section to scroll past.
  */
-function ArchivedProjects({ onRestored }: { onRestored: () => void }) {
+/**
+ * The archived projects, and the way back.
+ *
+ * `q` is threaded in deliberately. This list fetches separately from the active
+ * one, so the search box above filtered only live projects: typing the name of
+ * an archived project gave "No matches" while that project sat visible a few
+ * hundred pixels below. It searched half the page and reported on the whole.
+ */
+function ArchivedProjects({ onRestored, q }: { onRestored: () => void; q: string }) {
   const { t } = useI18n();
   const toast = useToast();
   const canArchive = useCan("project.archive");
   const { data, loading, reload } = useApi<any[]>("/projects?archived=1", []);
   const [openList, setOpenList] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const rows = data ?? [];
+  const needle = q.trim().toLowerCase();
+  const all = data ?? [];
+  const rows = needle
+    ? all.filter((p: any) =>
+        `${p.name} ${p.client_name ?? ""} ${p.code ?? ""}`.toLowerCase().includes(needle))
+    : all;
 
+  /* Hidden when nothing is archived, and when a search matches none of them —
+     but NOT auto-opened, so a search still has to be acted on rather than
+     rearranging the page under the person typing. */
   if (loading || rows.length === 0) return null;
 
   async function restore(p: any) {
