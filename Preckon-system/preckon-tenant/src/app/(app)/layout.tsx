@@ -231,7 +231,14 @@ function AppShell({
                     <div className="rl">{roleLabel}</div>
                   </div>
                   <button className="out" title={t("shell.signOut")} aria-label={t("shell.signOut")}
-                          onClick={() => authClient.signOut().then(() => router.replace("/login"))}>
+                          /* Asks first. Sign-out is one click beside the user's
+                             own name in a rail people click through all day, and
+                             the cost of a misclick is every unsaved drawer and
+                             every half-typed correction on screen. */
+                          onClick={() => {
+                            if (!window.confirm(t("shell.signOutConfirm"))) return;
+                            void authClient.signOut().then(() => router.replace("/login"));
+                          }}>
                     <svg className="dir-flip" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M15 12H3M8 7l-5 5 5 5" /><path d="M13 4h6a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-6" /></svg>
                   </button>
                 </div>

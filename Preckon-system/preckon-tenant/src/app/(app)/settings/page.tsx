@@ -14,6 +14,45 @@ const TABS: { key: string; label: Key }[] = [
   { key: "prefs", label: "settings.tabPrefs" },
 ];
 
+
+/* Permission keys, grouped and translated into what they let a person do.
+   The keys stay the source of truth — anything unmapped simply does not appear,
+   so a new permission cannot silently claim a capability nobody wrote copy for. */
+const PERM_TEXT: Record<string, Key> = {
+  "project.create": "perm.projectCreate",
+  "project.update": "perm.projectUpdate",
+  "project.archive": "perm.projectArchive",
+  "project.read_all": "perm.projectReadAll",
+  "project.member.manage": "perm.projectMembers",
+  "artifact.confirm": "perm.artifactConfirm",
+  "artifact.edit": "perm.artifactEdit",
+  "workflow.run": "perm.workflowRun",
+  "library.manage": "perm.libraryManage",
+  "admin.users": "perm.adminUsers",
+  "admin.branding": "perm.adminBranding",
+  "admin.settings": "perm.adminSettings",
+  "billing.view": "perm.billingView",
+  "tenant.transfer_ownership": "perm.transferOwnership",
+};
+
+const PERM_GROUPS: { domain: string; label: Key; keys: string[] }[] = [
+  { domain: "project",  label: "perm.groupProjects", keys: ["project.create", "project.update", "project.archive", "project.read_all", "project.member.manage"] },
+  { domain: "work",     label: "perm.groupWork",     keys: ["artifact.confirm", "artifact.edit", "workflow.run"] },
+  { domain: "library",  label: "perm.groupLibrary",  keys: ["library.manage"] },
+  { domain: "admin",    label: "perm.groupAdmin",    keys: ["admin.users", "admin.branding", "admin.settings", "billing.view", "tenant.transfer_ownership"] },
+];
+
+function groupPermissions(held: string[]): { domain: string; label: Key; can: Key[] }[] {
+  const has = new Set(held);
+  return PERM_GROUPS
+    .map((g) => ({
+      domain: g.domain,
+      label: g.label,
+      can: g.keys.filter((k) => has.has(k)).map((k) => PERM_TEXT[k]).filter(Boolean),
+    }))
+    .filter((g) => g.can.length > 0);
+}
+
 export default function SettingsPage() {
   const [tab, setTab] = useState("profile");
   const { t } = useI18n();
@@ -62,9 +101,19 @@ function Profile() {
         <h2>{t("settings.canDo")}</h2>
         <div className="csub">{t("settings.canDoSub")}</div>
         {!me ? <Skeleton rows={3} /> : (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
-            {me.permissions.map((p) => (
-              <span key={p} className="chip plain" style={{ color: "var(--slate-600)", background: "var(--panel-2)" }}>{p}</span>
+          /* Grouped by domain and written as things a person does, rather than
+             a wall of raw keys. It listed "artifact.confirm", "workflow.run",
+             "tenant.transfer_ownership" and twenty more in a flat row — every
+             one of them accurate, and none of them an answer to "what can I do
+             here?" for anyone who had not read the permission model. */
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
+            {groupPermissions(me.permissions).map((g) => (
+              <div key={g.domain}>
+                <div className="sl" style={{ marginBottom: 5 }}>{t(g.label)}</div>
+                <ul style={{ margin: 0, paddingInlineStart: 18, display: "flex", flexDirection: "column", gap: 3 }}>
+                  {g.can.map((k) => <li key={k} className="csub" style={{ fontSize: 13 }}>{t(k)}</li>)}
+                </ul>
+              </div>
             ))}
             {me.permissions.length === 0 && <p className="csub" style={{ margin: 0 }}>{t("settings.noPerms")}</p>}
           </div>
