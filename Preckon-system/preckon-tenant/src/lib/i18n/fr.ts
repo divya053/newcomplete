@@ -808,7 +808,7 @@ export const fr: Dict = {
   "usage.projected": "Projection du mois",
   "usage.projectedSub": "Jour {day} sur {days}",
   "usage.wasted": "D\u00e9pens\u00e9 pour rien",
-  "usage.wastedSub": "{pct}% sans r\u00e9sultat",
+  "usage.wastedSub": "{n} appels, {pct}% du mois, sans r\u00e9sultat",
   "usage.byStep": "Co\u00fbt par \u00e9tape",
   "usage.byStepSub": "Tokens et co\u00fbt par type de t\u00e2che",
   "usage.byProject": "La facture, par projet",

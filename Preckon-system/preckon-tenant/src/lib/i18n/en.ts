@@ -806,7 +806,7 @@ export const en = {
   "usage.projected": "Projected month",
   "usage.projectedSub": "Day {day} of {days}, straight-line",
   "usage.wasted": "Spent on nothing",
-  "usage.wastedSub": "{pct}% of calls produced nothing",
+  "usage.wastedSub": "{n} calls, {pct}% of the month, produced nothing",
   "usage.byStep": "Cost per step",
   "usage.byStepSub": "Tokens and cost for every task type this month, split by how it ran",
   "usage.byProject": "The bill, per project",

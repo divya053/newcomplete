@@ -63,8 +63,9 @@ export default function UsageAdmin() {
              sub={t("usage.callsN", { n: num(d.month.calls) })} />
         <Kpi label={t("usage.projected")} value={money(d.month.projectedCostMinor)}
              sub={t("usage.projectedSub", { day: d.month.dayOfMonth, days: d.month.daysInMonth })} />
-        <Kpi label={t("usage.wasted")} value={money(wasteMinor)}
-             sub={t("usage.wastedSub", { pct: failRate })} warn={wasteMinor > 0} />
+        <Kpi label={t("usage.wasted")} value={wasteValue}
+             sub={t("usage.wastedSub", { n: num(wasteCalls), pct: failRate })}
+             warn={wasteCalls > 0} />
       </div>
 
       {/* ── Per step. The table the question "how much does this step cost"
