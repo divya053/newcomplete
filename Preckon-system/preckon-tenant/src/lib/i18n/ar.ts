@@ -272,6 +272,7 @@ export const ar: Dict = {
 
   /* ── shared surface machinery ─────────────────────────────────────────── */
   "stage.run": "تشغيل",
+  "stage.rerun": "إعادة التشغيل",
   "stage.workflowLabel": "تدفق عمل {stage}",
   "stage.paused": "متوقّف — بانتظارك",
   "stage.running": "قيد التشغيل",

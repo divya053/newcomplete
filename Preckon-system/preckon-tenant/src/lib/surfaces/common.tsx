@@ -153,7 +153,7 @@ export function StageHeader({
         {canRun && mine.length > 0 && (
           mine.length <= 2 ? (
             mine.map((w) => (
-              <button key={w.key} className="mini sm" disabled={busy || !!active} onClick={() => start(w.key)} title={w.key}>
+              <button key={w.key} className="mini sm" disabled={blocked} onClick={() => start(w.key)} title={w.key}>
                 ▶ {w.name}
               </button>
             ))
@@ -168,7 +168,7 @@ export function StageHeader({
               >
                 {mine.map((w) => <option key={w.key} value={w.key}>{w.name}</option>)}
               </select>
-              <button className="mini sm" disabled={busy || !!active || !selected} onClick={() => start(selected)}>▶ {t("stage.run")}</button>
+              <button className="mini sm primary" disabled={blocked || !selected} onClick={() => start(selected)}>▶ {active?.status === "awaiting_review" ? t("stage.rerun") : t("stage.run")}</button>
             </>
           )
         )}

@@ -271,6 +271,7 @@ export const en = {
 
   /* ── shared surface machinery ─────────────────────────────────────────── */
   "stage.run": "Run",
+  "stage.rerun": "Re-run",
   "stage.workflowLabel": "{stage} workflow",
   "stage.paused": "paused — waiting on you",
   "stage.running": "running",

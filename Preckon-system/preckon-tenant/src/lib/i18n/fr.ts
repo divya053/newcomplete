@@ -273,6 +273,7 @@ export const fr: Dict = {
 
   /* ── shared surface machinery ─────────────────────────────────────────── */
   "stage.run": "Exécuter",
+  "stage.rerun": "Relancer",
   "stage.workflowLabel": "Flux {stage}",
   "stage.paused": "en pause — vous attend",
   "stage.running": "en cours",
