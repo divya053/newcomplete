@@ -51,6 +51,15 @@ export interface JobOutput {
   confidence?: number;
 }
 
+/** Mean confidence over the outputs an attempt produced; null when none say. */
+function avgConfidence(outputs?: JobOutput[]): number | null {
+  const vals = (outputs ?? [])
+    .map((o) => o.confidence)
+    .filter((c): c is number => typeof c === "number" && Number.isFinite(c));
+  if (!vals.length) return null;
+  return Number((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(6));
+}
+
 export interface JobResult {
   job_id: string;
   status: "succeeded" | "failed";
@@ -528,6 +537,25 @@ export async function recordJobResult(result: JobResult): Promise<{
     outputTokens: result.usage?.output_tokens ?? 0,
     costMinor: result.usage?.cost_minor ?? 0,
     cacheHit: servedFromCache,
+    /* Measured here rather than reported by the worker: this is the figure a
+       customer experiences — dispatch to callback, including the queue the
+       worker cannot see. The column existed and was written as a literal 0 on
+       every row, because latencyMs was declared on UsageRow and no caller ever
+       passed it. */
+    latencyMs: job.started_at ? Math.max(0, Date.now() - new Date(job.started_at).getTime()) : 0,
+    /* The agent's own confidence, averaged over what this attempt produced.
+       Recorded so it can be checked against decision_outcome later: if a 0.9
+       and a 0.4 are accepted by reviewers at the same rate, the number is
+       decoration and should come off the screen. */
+    confidence: avgConfidence(result.outputs),
+    /* Distinct from `outcome`, which only says the CALL worked. A model that
+       answers at length and yields nothing parseable bills exactly like a good
+       answer — "no usable outputs from cost.price_lines (13316 chars
+       returned)" — and outcome alone cannot tell them apart. */
+    validationStatus:
+      status === "failed" ? "failed"
+      : (result.outputs?.length ?? 0) === 0 ? "no_outputs"
+      : "accepted",
     outcome: status,
     errorCode: result.error ? "worker_error" : null,
   });
