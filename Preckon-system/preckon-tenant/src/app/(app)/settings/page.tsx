@@ -225,7 +225,10 @@ function Preferences() {
       <div className="set-row">
         <div><div className="sl">{t("settings.dateFormat")}</div><div className="desc">{t("settings.dateFormatSub")}</div></div>
         <select value={prefs.dateFormat} onChange={(e) => setPref("dateFormat", e.target.value)}>
-          {["DD MMM YYYY", "MM/DD/YYYY", "YYYY-MM-DD"].map((f) => <option key={f}>{f}</option>)}
+          {/* DD/MM/YYYY was missing, which is the format most of the world
+              writes and the one the report asked for. MM/DD/YYYY on its own
+              also makes 03/04 ambiguous with no day-first option beside it. */}
+          {["DD MMM YYYY", "DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD"].map((f) => <option key={f}>{f}</option>)}
         </select>
       </div>
 

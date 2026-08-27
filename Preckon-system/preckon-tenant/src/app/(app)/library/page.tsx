@@ -56,6 +56,11 @@ export default function LibraryPage() {
 
       {collections.length > 0 && (
         <>
+          {/* One collection needs no tabs. With a single entry type, "All 6" and
+              "Standard Rule 6" filtered to the same six rows and differed only in
+              which one looked selected — a control that does nothing but still
+              asks to be understood. */}
+          {collections.length > 1 && (
           <nav className="pw-tabs">
             <button className={tab === "all" ? "on" : ""} onClick={() => setTab("all")}>{t("library.all")} {(data ?? []).length}</button>
             {collections.map((c) => (
@@ -64,6 +69,7 @@ export default function LibraryPage() {
               </button>
             ))}
           </nav>
+          )}
           <div className="fbar">
             <div className="fsearch">
               <Icon.search />
