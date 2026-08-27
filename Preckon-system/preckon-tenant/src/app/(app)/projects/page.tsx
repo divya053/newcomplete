@@ -245,10 +245,14 @@ function ArchivedProjects({ onRestored, q }: { onRestored: () => void; q: string
         `${p.name} ${p.client_name ?? ""} ${p.code ?? ""}`.toLowerCase().includes(needle))
     : all;
 
-  /* Hidden when nothing is archived, and when a search matches none of them —
-     but NOT auto-opened, so a search still has to be acted on rather than
-     rearranging the page under the person typing. */
+  /* Hidden when nothing is archived, and when a search matches none of them. */
   if (loading || rows.length === 0) return null;
+
+  /* Open on a search that matches. The complaint was that a person could not
+     find an archived project by searching for it, and a collapsed section
+     containing the answer does not fix that — it just moves where the answer
+     is hidden. With no search it stays shut, so a clean list stays clean. */
+  const open = openList || needle.length > 0;
 
   async function restore(p: any) {
     setBusyId(p.id);
@@ -266,12 +270,12 @@ function ArchivedProjects({ onRestored, q }: { onRestored: () => void; q: string
 
   return (
     <div className="card sch" style={{ marginTop: 16 }}>
-      <button className="sch-head" onClick={() => setOpenList((v) => !v)} aria-expanded={openList}>
-        <span className="tw-glyph" aria-hidden>{openList ? "▾" : "▸"}</span>
+      <button className="sch-head" onClick={() => setOpenList((v) => !v)} aria-expanded={open}>
+        <span className="tw-glyph" aria-hidden>{open ? "▾" : "▸"}</span>
         <span className="sch-name">{t("projects.archivedTitle")}</span>
         <span className="sch-meta mono">{rows.length}</span>
       </button>
-      {openList && (
+      {open && (
         <>
           <div className="csub" style={{ padding: "0 2px 10px" }}>{t("projects.archivedSub")}</div>
           <div className="tw">
