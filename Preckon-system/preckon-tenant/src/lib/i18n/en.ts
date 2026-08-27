@@ -814,6 +814,7 @@ export const en = {
   "usage.projected": "Projected month",
   "usage.projectedSub": "Day {day} of {days}, straight-line",
   "usage.finalTotal": "Final total",
+  "usage.totalSoFar": "Total so far",
   "usage.finalTotalSub": "The month is complete \u2014 this is what it cost",
   "usage.allTimeSub": "Everything recorded so far",
   "usage.wasted": "Spent on nothing",

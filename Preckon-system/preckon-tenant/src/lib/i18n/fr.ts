@@ -816,6 +816,7 @@ export const fr: Dict = {
   "usage.projected": "Projection du mois",
   "usage.projectedSub": "Jour {day} sur {days}",
   "usage.finalTotal": "Total final",
+  "usage.totalSoFar": "Total \u00e0 ce jour",
   "usage.finalTotalSub": "Le mois est termin\u00e9 \u2014 voici son co\u00fbt",
   "usage.allTimeSub": "Tout ce qui est enregistr\u00e9 \u00e0 ce jour",
   "usage.wasted": "D\u00e9pens\u00e9 pour rien",

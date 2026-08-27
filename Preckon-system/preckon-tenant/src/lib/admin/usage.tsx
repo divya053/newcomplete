@@ -106,7 +106,7 @@ export default function UsageAdmin() {
             finished month the API returns the actual, so calling it "projected"
             would dress a final figure up as an estimate. */}
         <Kpi
-          label={isPastMonth ? t("usage.finalTotal") : t("usage.projected")}
+          label={isPastMonth ? t("usage.finalTotal") : isAllTime ? t("usage.totalSoFar") : t("usage.projected")}
           value={money(d.month.projectedCostMinor)}
           sub={isPastMonth
             ? t("usage.finalTotalSub")
