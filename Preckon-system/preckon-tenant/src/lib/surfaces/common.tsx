@@ -91,7 +91,6 @@ export function StageHeader({
   const { t } = useI18n();
   const canRun = useCan("workflow.run");
   const [busy, setBusy] = useState(false);
-  const [choice, setChoice] = useState("");
   const mine = workflows.filter((w) => w.moduleKey === stage.key);
   const mineKeys = new Set(mine.map((w) => w.key));
   const active = runs.find((r) => mineKeys.has(r.workflow_key) && (r.status === "running" || r.status === "awaiting_review"));
@@ -131,7 +130,7 @@ export function StageHeader({
      action — press Run on the Tender stage — started bid assembly instead of
      reading the tender, and nothing about the screen said so. */
   const primary = mine.find((w) => w.key === `workflow.${stage.key}`)?.key;
-  const selected = choice || primary || mine[0]?.key || "";
+  const selected = primary || mine[0]?.key || "";
 
   /* Blocked only by a run actually in flight. A parked one is cleared by start(). */
   const blocked = busy || active?.status === "running";
@@ -148,29 +147,30 @@ export function StageHeader({
       </div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
         {right}
-        {/* One or two workflows read fine as buttons; a pack with six needs a
-            picker, or the header turns into a wall of verbs. */}
-        {canRun && mine.length > 0 && (
-          mine.length <= 2 ? (
-            mine.map((w) => (
-              <button key={w.key} className="mini sm" disabled={blocked} onClick={() => start(w.key)} title={w.key}>
-                ▶ {w.name}
-              </button>
-            ))
-          ) : (
-            <>
-              <select
-                className="mono"
-                aria-label={t("stage.workflowLabel", { stage: stage.full })}
-                value={selected}
-                onChange={(e) => setChoice(e.target.value)}
-                style={{ fontSize: 11.5, padding: "6px 9px", border: "1px solid var(--hairline)", borderRadius: 7, background: "var(--panel-2)", color: "var(--ink)", maxWidth: 220 }}
-              >
-                {mine.map((w) => <option key={w.key} value={w.key}>{w.name}</option>)}
-              </select>
-              <button className="mini sm primary" disabled={blocked || !selected} onClick={() => start(selected)}>▶ {active?.status === "awaiting_review" ? t("stage.rerun") : t("stage.run")}</button>
-            </>
-          )
+        {/* One button. It runs the stage's own workflow.
+
+            This was a picker over every workflow sharing the module key —
+            seven of them on the Tender stage, listing BidAssembly,
+            BidQualification, ClarificationLoop, Classify documents, RiskReview
+            and a walking skeleton beside TenderLogix itself. That put the whole
+            pursuit's internals in front of someone who wanted one thing, and it
+            defaulted to the wrong one.
+
+            The others are not lost: autopilot runs them in dependency order,
+            which is how they are meant to run. Choosing one by hand is a
+            developer's action, and the run detail page is where it belongs.
+
+            title carries the key it will start, so which workflow this is
+            stays checkable without putting it on screen. */}
+        {canRun && selected && (
+          <button
+            className="mini sm primary"
+            disabled={blocked}
+            onClick={() => start(selected)}
+            title={selected}
+          >
+            ▶ {active?.status === "awaiting_review" ? t("stage.rerun") : t("stage.run")}
+          </button>
         )}
       </div>
     </div>
