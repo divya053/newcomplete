@@ -115,7 +115,14 @@ const failure = (base, message, detail) => ({
  * schema-valid (Core validates them regardless, §5.1).
  */
 export async function computeJobResult(env) {
-  return withMeter(() => computeJobResultMetered(env));
+  return withMeter(async () => {
+    const result = await computeJobResultMetered(env);
+    /* Usage is read HERE, after the work, and overwrites what `base` carried.
+       base is built at the top of the job and used to spread into every return,
+       so the usage on it was read from an empty meter — every row came back
+       zero. A constant did not care when it was read; a measurement does. */
+    return { ...result, usage: usage(env) };
+  });
 }
 
 async function computeJobResultMetered(env) {

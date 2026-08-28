@@ -598,8 +598,12 @@ export async function recordJobResult(result: JobResult): Promise<{
        returned)" — and outcome alone cannot tell them apart. */
     validationStatus:
       status === "failed" ? "failed"
-      : (result.outputs?.length ?? 0) === 0 ? "no_outputs"
-      : "accepted",
+      /* A supervisor job answers with `message`, not `outputs` — the Copilot
+         returns prose, not artifacts. Counting that as "no_outputs" filed every
+         successful Copilot answer as a call that produced nothing, which is the
+         column's whole purpose inverted. */
+      : (result.outputs?.length ?? 0) > 0 || result.message ? "accepted"
+      : "no_outputs",
     outcome: status,
     errorCode: result.error ? "worker_error" : null,
   });
