@@ -117,11 +117,19 @@ const failure = (base, message, detail) => ({
 export async function computeJobResult(env) {
   return withMeter(async () => {
     const result = await computeJobResultMetered(env);
+    const m = readMeter();
+
     /* Usage is read HERE, after the work, and overwrites what `base` carried.
-       base is built at the top of the job and used to spread into every return,
-       so the usage on it was read from an empty meter — every row came back
-       zero. A constant did not care when it was read; a measurement does. */
-    return { ...result, usage: usage(env) };
+       base is built at the top of the job and spread into every return, so the
+       usage on it was read from an empty meter and every row came back zero. A
+       constant did not care when it was read; a measurement does.
+
+       Only when a model was ACTUALLY called. A stub path returns
+       stubUsage() — model "stub:deterministic", zero tokens — and overriding
+       that unconditionally relabelled it with the tier's Claude id, recording a
+       model that never ran. worker-stub-policy.test.ts caught it, which is what
+       it was written for. */
+    return m && m.calls > 0 ? { ...result, usage: usage(env) } : result;
   });
 }
 
