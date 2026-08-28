@@ -7,6 +7,7 @@ import { currentRequestId, logInfo, logWarn } from "./log";
 import { decideDispatch, type DispatchDecision } from "./ai/govern";
 import { loadRegistry, loadTenantPolicy, recordUsage, spendFor } from "./ai/store";
 import { TIER_ALIAS } from "./ai/registry";
+import { costMinor as priceOf } from "./ai/budget";
 import { parseRef, resolvePrompt } from "./ai/prompt-store";
 import type { CacheDimensions } from "./ai/cache";
 import * as responseCache from "./ai/cache-store";
@@ -60,6 +61,42 @@ function avgConfidence(outputs?: JobOutput[]): number | null {
   return Number((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(6));
 }
 
+
+/**
+ * Price a job's real token usage against the model registry.
+ *
+ * Costing belongs here, not in the worker. The worker has no database and so no
+ * rate card; it used to return a flat cost_minor of 8 for every job, which made
+ * the bill a constant rather than a measurement. It now reports tokens only.
+ *
+ * Falls back to 0 rather than to a guessed rate: a zero is visibly wrong on the
+ * usage page and invites someone to register the model, whereas an invented
+ * price looks exactly like a real one and never gets questioned.
+ */
+async function priceUsage(
+  alias: string | null,
+  usage: { input_tokens?: number; output_tokens?: number; cached_input_tokens?: number } | undefined,
+): Promise<number> {
+  const inputTokens = Number(usage?.input_tokens ?? 0);
+  const outputTokens = Number(usage?.output_tokens ?? 0);
+  if (!alias || (inputTokens <= 0 && outputTokens <= 0)) return 0;
+  try {
+    const registry = await loadRegistry();
+    const card = registry.find((m) => m.alias === alias)?.rateCard;
+    if (!card) {
+      logWarn("ai.cost.no_rate_card", { alias });
+      return 0;
+    }
+    return priceOf(
+      { inputTokens, outputTokens, cachedInputTokens: Number(usage?.cached_input_tokens ?? 0) },
+      card,
+    );
+  } catch (e) {
+    logWarn("ai.cost.price_failed", { alias, error: String(e) });
+    return 0;
+  }
+}
+
 export interface JobResult {
   job_id: string;
   status: "succeeded" | "failed";
@@ -75,7 +112,10 @@ export interface JobResult {
     rationale: string;
     payload?: Record<string, unknown>;
   }>;
-  usage?: { model: string; input_tokens: number; output_tokens: number; cost_minor: number };
+  /* cost_minor is always 0 from the worker now — Core prices the tokens against
+     the model registry. Kept on the type because older workers may still send it
+     and an extra field is harmless; it is simply not read. */
+  usage?: { model: string; input_tokens: number; output_tokens: number; cached_input_tokens?: number; cost_minor?: number };
   /** Set only by tryCachedJob. Never sent by a worker, which is the point: a
    *  stub-mode result also reports zero tokens, and inferring "cached" from a
    *  zero cost would file it as reuse that never happened. */
@@ -481,6 +521,15 @@ export async function recordJobResult(result: JobResult): Promise<{
     return { job, alreadyDone: true }; // idempotent — duplicate callback is a no-op
 
   const status = result.status === "succeeded" ? "succeeded" : "failed";
+
+  /* Priced once, here, and used by every writer below — ai_job, the ledger and
+     the cache all report the same number. The worker sends token counts and no
+     price: it has no database and therefore no rate card, so costing it there
+     meant a constant. */
+  const servedFromCache = result.from_cache === true;
+  const alias = TIER_ALIAS[job.tier] ?? job.tier ?? null;
+  const costMinor = servedFromCache ? 0 : await priceUsage(alias, result.usage);
+
   // The queue stops watching a job the moment a real result lands, so the
   // reconciler cannot reclaim one that has already reported.
   await clearLease(result.job_id);
@@ -497,7 +546,7 @@ export async function recordJobResult(result: JobResult): Promise<{
       result.trace_id ?? null,
       result.usage?.input_tokens ?? null,
       result.usage?.output_tokens ?? null,
-      result.usage?.cost_minor ?? null,
+      costMinor,
       result.usage?.model ?? null,
       result.job_id,
     ]
@@ -512,11 +561,6 @@ export async function recordJobResult(result: JobResult): Promise<{
      duplicate callback cannot double-count. */
   const envelope = parseEnvelope(job.envelope);
   const promptRef = parseRef(job.prompt_ref ?? "");
-  // Declared by the caller, not inferred from a zero cost. Keeping "what we
-  // served" and "what we paid for" separable is the whole point of the
-  // cache_hit column, and a stub-mode result would fail a cost-based guess.
-  const servedFromCache = result.from_cache === true;
-
   await recordUsage({
     tenantId: job.tenant_id,
     projectId: job.project_id,
@@ -526,7 +570,7 @@ export async function recordJobResult(result: JobResult): Promise<{
     module: job.agent_key,
     taskType: job.job_type,
     executionClass: servedFromCache ? "cache" : "external",
-    modelAlias: TIER_ALIAS[job.tier] ?? job.tier ?? null,
+    modelAlias: alias,
     providerModel: result.usage?.model ?? job.model ?? null,
     // Which prompt produced this output. Read off the job row rather than
     // resolved again: the registry may have approved a new version since this
@@ -535,7 +579,7 @@ export async function recordJobResult(result: JobResult): Promise<{
     promptVersion: promptRef.version,
     inputTokens: result.usage?.input_tokens ?? 0,
     outputTokens: result.usage?.output_tokens ?? 0,
-    costMinor: result.usage?.cost_minor ?? 0,
+    costMinor,
     cacheHit: servedFromCache,
     /* Measured here rather than reported by the worker: this is the figure a
        customer experiences — dispatch to callback, including the queue the
@@ -581,7 +625,9 @@ export async function recordJobResult(result: JobResult): Promise<{
       response: { outputs: result.outputs ?? [], message: result.message ?? null },
       inputTokens: result.usage?.input_tokens ?? 0,
       outputTokens: result.usage?.output_tokens ?? 0,
-      costMinor: result.usage?.cost_minor ?? 0,
+      /* The same priced figure the ledger recorded, so "what this answer cost"
+         and "what we saved by reusing it" are the same number. */
+      costMinor,
     });
   }
 

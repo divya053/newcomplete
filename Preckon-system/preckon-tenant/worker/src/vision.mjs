@@ -1,3 +1,4 @@
+import { record } from "./meter.mjs";
 /**
  * vision — read the PDF drawing sheets the DXF toolbox cannot see.
  *
@@ -49,6 +50,7 @@ async function renderPages(pdf, maxPages, dpi) {
   });
   if (!res.ok) throw new Error(`cad ${res.status}: ${(await res.text()).slice(0, 160)}`);
   const body = await res.json();
+    record(body.usage);
   return Array.isArray(body?.pages) ? body.pages : [];
 }
 
@@ -105,6 +107,7 @@ export async function runVisionPass({ model, pdfs = [], maxSheets = 4, pagesPerP
     });
     if (!res.ok) throw new Error(`anthropic ${res.status}: ${(await res.text()).slice(0, 200)}`);
     const body = await res.json();
+    record(body.usage);
     const text = (body.content ?? [])
       .filter((b) => b.type === "text")
       .map((b) => b.text ?? "")

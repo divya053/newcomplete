@@ -1,3 +1,4 @@
+import { record } from "./meter.mjs";
 /**
  * agentic-loop — a tool-using ReAct loop over the Anthropic Messages API.
  *
@@ -32,7 +33,10 @@ async function post(body) {
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`anthropic ${res.status}: ${(await res.text()).slice(0, 300)}`);
-  return res.json();
+  const data = await res.json();
+  // Every turn of the loop is a billable call; the meter accumulates them all.
+  record(data.usage);
+  return data;
 }
 
 

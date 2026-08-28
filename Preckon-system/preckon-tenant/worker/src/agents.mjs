@@ -4,6 +4,7 @@
 // nondeterminism. Swapping in real Claude calls is a change to THIS file only;
 // the trust boundary (worker has no store access) is unchanged.
 
+import { withMeter, record, readMeter } from "./meter.mjs";
 import { PROMPTS, hasPrompt, supervisorPrompt, outlinePrompt, sectionPrompt, designerPrompt, verifierPrompt } from "./prompts.mjs";
 import { projectToolbox } from "./project-tools.mjs";
 import { createCadToolbox, buildExtractionDigest, knownNames } from "./cad-tools.mjs";
@@ -25,8 +26,27 @@ const ids = (env) => (env.inputs?.artifacts ?? []).map((a) => a.id);
 const ofType = (env, type) =>
   (env.inputs?.artifacts ?? []).filter((a) => (a.type ?? "").endsWith(type));
 
+/**
+ * What this job actually used.
+ *
+ * Was three constants — 500 in, 120 out, 8 minor — returned for every job of
+ * every type. Now the accumulated total of every Anthropic response the job
+ * produced.
+ *
+ * cost_minor stays 0 deliberately. The worker has no database and therefore no
+ * rate card, and it is the wrong place to hold prices: Core prices the tokens
+ * against ai_model_registry when it writes the ledger row, so a price change is
+ * a registry edit rather than a worker deploy.
+ */
 function usage(env) {
-  return { model: env.tier === "deep" ? "claude-opus-4-8" : "claude-haiku-4-5", input_tokens: 500, output_tokens: 120, cost_minor: 8 };
+  const m = readMeter();
+  return {
+    model: env.tier === "deep" ? "claude-opus-4-8" : "claude-haiku-4-5",
+    input_tokens: m?.inputTokens ?? 0,
+    output_tokens: m?.outputTokens ?? 0,
+    cached_input_tokens: m?.cachedInputTokens ?? 0,
+    cost_minor: 0,
+  };
 }
 
 /**
@@ -95,6 +115,10 @@ const failure = (base, message, detail) => ({
  * schema-valid (Core validates them regardless, §5.1).
  */
 export async function computeJobResult(env) {
+  return withMeter(() => computeJobResultMetered(env));
+}
+
+async function computeJobResultMetered(env) {
   const base = { job_id: env.job_id, usage: usage(env), trace_id: `lf_${env.job_id.slice(0, 8)}`, error: null };
   const template = buildOutputs(env);
   const policy = stubPolicy();
@@ -599,6 +623,7 @@ async function callAnthropic(model, system, userText, maxTokens) {
   });
   if (!res.ok) throw new Error(`anthropic ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const data = await res.json();
+  record(data.usage);
   return (data.content ?? []).map((c) => c.text ?? "").join("");
 }
 
