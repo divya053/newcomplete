@@ -115,3 +115,18 @@ describe("the data the header needs actually arrives", () => {
       .toMatch(/wasLive\.current && !anyLive/);
   });
 });
+
+describe("a cancelled run is not reported as a success", () => {
+  it("has its own branch above the completed one", () => {
+    // Re-run cancels a parked run before starting a new one, so a cancelled
+    // run is the newest run of its module for as long as the new one takes to
+    // appear. Falling through to the completed branch had the stage claim
+    // "completed in 2m 14s" for a run that was stopped and produced nothing.
+    const c = readFileSync(join(__dirname, "..", "src", "lib", "surfaces", "common.tsx"), "utf8");
+    const body = c.slice(c.indexOf("export function StageStatus"));
+    expect(body.indexOf('run.status === "cancelled"')).toBeGreaterThan(-1);
+    expect(body.indexOf('run.status === "cancelled"')).toBeLessThan(
+      body.indexOf('const failed = run.status === "failed"'),
+    );
+  });
+});

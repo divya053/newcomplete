@@ -166,6 +166,19 @@ export function StageStatus({
     );
   }
 
+  /* Cancelled is neither of the two below. Falling through to the completed
+     branch would have had a stage announce "completed in 2m 14s" for a run that
+     was stopped and produced nothing — and Re-run cancels a parked run, so this
+     is reachable the moment a re-run is started and does not itself begin. */
+  if (run.status === "cancelled") {
+    return (
+      <span className="stagestat">
+        <span className="chip skipped">{t("stage.cancelled")}</span>
+        <span className="sg-when">{timeAgo(run.ended_at ?? run.started_at)}</span>
+      </span>
+    );
+  }
+
   const failed = run.status === "failed";
   return (
     <span className="stagestat">

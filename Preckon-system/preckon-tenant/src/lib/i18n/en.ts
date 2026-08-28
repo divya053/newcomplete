@@ -283,6 +283,7 @@ export const en = {
   "stage.completedIn": "completed in {d}",
   "stage.failed": "failed",
   "stage.failedAfter": "failed after {d}",
+  "stage.cancelled": "cancelled",
   "stage.acceptAll": "Accept all ≥90%",
   "stage.notLicensed": "This module isn’t on your plan",
   "stage.notLicensedSub": "{key} isn’t licensed for this workspace, so it has no surface here. Licensed products are resolved from your edition.",

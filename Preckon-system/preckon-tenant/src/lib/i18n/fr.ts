@@ -285,6 +285,7 @@ export const fr: Dict = {
   "stage.completedIn": "terminé en {d}",
   "stage.failed": "échec",
   "stage.failedAfter": "échec après {d}",
+  "stage.cancelled": "annulé",
   "stage.acceptAll": "Tout accepter ≥90%",
   "stage.notLicensed": "Ce module n’est pas dans votre offre",
   "stage.notLicensedSub": "{key} n’est pas inclus pour cet espace de travail, il n’a donc pas d’écran ici. Les produits inclus découlent de votre édition.",

@@ -284,6 +284,7 @@ export const ar: Dict = {
   "stage.completedIn": "اكتمل في {d}",
   "stage.failed": "فشل",
   "stage.failedAfter": "فشل بعد {d}",
+  "stage.cancelled": "أُلغي",
   "stage.acceptAll": "قبول الكل ≥90%",
   "stage.notLicensed": "هذه الوحدة غير مشمولة في اشتراكك",
   "stage.notLicensedSub": "{key} غير مرخّصة لمساحة العمل هذه، لذا لا توجد لها واجهة هنا. تُحدَّد المنتجات المرخّصة من اشتراكك.",
