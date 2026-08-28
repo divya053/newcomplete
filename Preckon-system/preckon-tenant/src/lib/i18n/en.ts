@@ -278,7 +278,7 @@ export const en = {
   "stage.stepOf": "step {n} of {total}",
   "stage.toReview": "{n} to review",
   "stage.nothingToReview": "finished — nothing to review",
-  "stage.took": "took {d}",
+  "stage.ranAgo": "ran {ago}",
   "stage.completed": "completed",
   "stage.completedIn": "completed in {d}",
   "stage.failed": "failed",

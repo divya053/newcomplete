@@ -279,7 +279,7 @@ export const ar: Dict = {
   "stage.stepOf": "الخطوة {n} من {total}",
   "stage.toReview": "{n} للمراجعة",
   "stage.nothingToReview": "انتهى — لا شيء للمراجعة",
-  "stage.took": "استغرق {d}",
+  "stage.ranAgo": "تم التشغيل {ago}",
   "stage.completed": "اكتمل",
   "stage.completedIn": "اكتمل في {d}",
   "stage.failed": "فشل",

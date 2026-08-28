@@ -280,7 +280,7 @@ export const fr: Dict = {
   "stage.stepOf": "étape {n} sur {total}",
   "stage.toReview": "{n} à vérifier",
   "stage.nothingToReview": "terminé — rien à vérifier",
-  "stage.took": "a pris {d}",
+  "stage.ranAgo": "exécuté {ago}",
   "stage.completed": "terminé",
   "stage.completedIn": "terminé en {d}",
   "stage.failed": "échec",

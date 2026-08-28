@@ -134,7 +134,6 @@ export function StageStatus({
      none rather than counting up forever against a stopped clock. */
   const span = started == null ? null : running ? now - started : ended == null ? null : ended - started;
 
-  const parts: React.ReactNode[] = [];
   const step = total > 0 && (
     <span key="step" className="sg-step">{t("stage.stepOf", { n: Math.min(done + (running ? 1 : 0), total), total })}</span>
   );
@@ -153,13 +152,16 @@ export function StageStatus({
     /* The count comes from the stage's own artifacts, not the run: it is what
        the panel below is actually offering. Zero of them is the parked run —
        named as finished, because that is what it is, and Re-run is right there. */
+    /* No duration here: ended_at is only written when a run completes, fails or
+       is cancelled, so a run holding at a gate has none. How long ago it stopped
+       is the fact that matters anyway — a stage parked since last month reads
+       very differently from one that finished a minute ago. */
     return (
       <span className="stagestat">
         {stage.pending > 0
           ? <span className="chip pending">{t("stage.toReview", { n: stage.pending })}</span>
           : <span className="chip skipped">{t("stage.nothingToReview")}</span>}
-        {span != null && <span className="sg-when">{t("stage.took", { d: fmtTook(span) })}</span>}
-        <span className="sg-when">{timeAgo(run.ended_at ?? run.started_at)}</span>
+        <span className="sg-when">{t("stage.ranAgo", { ago: timeAgo(run.started_at) })}</span>
       </span>
     );
   }
