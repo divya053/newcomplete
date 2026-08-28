@@ -29,6 +29,27 @@ if (-not $env:PRECKON_HOST) {
   Write-Host 'Set PRECKON_HOST first, e.g.  $env:PRECKON_HOST = "your.server.ip"' -ForegroundColor Red
   exit 1
 }
+
+# A placeholder pasted verbatim. Worth its own check because the failure it
+# causes otherwise is 25 SSH attempts against a name that cannot resolve,
+# ending in "the link is too unstable" - which sends you to look at the network
+# when the actual problem is on this line.
+if ($env:PRECKON_HOST -match '[<>\s]' -or $env:PRECKON_HOST -match '^(your\.server\.ip|your-server-ip|example\.com)$') {
+  Write-Host "PRECKON_HOST is '$($env:PRECKON_HOST)' - that is the placeholder, not an address." -ForegroundColor Red
+  Write-Host 'Set it to the real one, e.g.  $env:PRECKON_HOST = "203.0.113.10"' -ForegroundColor Red
+  exit 1
+}
+
+# Resolve before doing anything expensive. An IP literal needs no lookup - and
+# must not get one, since a reverse lookup can fail for a perfectly good server.
+$parsedIp = $null
+if (-not [Net.IPAddress]::TryParse($env:PRECKON_HOST, [ref]$parsedIp)) {
+  try { [Net.Dns]::GetHostAddresses($env:PRECKON_HOST) | Out-Null }
+  catch {
+    Write-Host "PRECKON_HOST is '$($env:PRECKON_HOST)' and does not resolve to anything." -ForegroundColor Red
+    exit 1
+  }
+}
 $Server  = "root@$($env:PRECKON_HOST)"
 $DbPass  = if ($env:DATABASE_PASSWORD) { $env:DATABASE_PASSWORD } else { "preckon" }
 $Root    = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)  # ...\Preckon-system
@@ -154,6 +175,7 @@ function Send-Bundle {
 
   $batch = Join-Path $env:TEMP "preckon-put.sftp"
 
+  $maxLanded = 0
   for ($i = 1; $i -le $Attempts; $i++) {
     # `reput` is RESUME put: it stats the remote file and fails outright if there
     # is nothing to resume - which is precisely the state the prefix check above
@@ -192,15 +214,33 @@ function Send-Bundle {
       Invoke-Native { & ssh @SshOpts $Server "rm -f '$Remote'" } | Out-Null
       continue
     }
+    if ($landed -gt $maxLanded) { $maxLanded = $landed }
     Write-Host ("    attempt {0}: {1:N0} / {2:N0} bytes ({3:P0}) - resuming" -f `
                 $i, $landed, $Size, ($landed / $Size)) -ForegroundColor DarkYellow
   }
-  throw "upload did not complete in $Attempts attempts - the link to $($env:PRECKON_HOST) is too unstable"
+  # "Unstable" is only true if bytes were actually moving. Zero progress across
+  # every attempt is a different fault and deserves a different sentence.
+  if ($maxLanded -eq 0) {
+    throw "nothing landed in $Attempts attempts - $($env:PRECKON_HOST) accepted no data at all. This is not link instability; check disk space and permissions on the server."
+  }
+  throw "upload did not complete in $Attempts attempts - the link to $($env:PRECKON_HOST) is too unstable (best: $maxLanded of $Size bytes)"
 }
 
 # Computed here so the server can be told what to expect, independently of
 # anything the upload path claims about itself.
 $BundleSha = (Get-FileHash $Bundle -Algorithm SHA256).Hash.ToLower()
+
+# One round trip before the retry loop, so an unreachable server is reported as
+# unreachable. The loop below is built for a link that drops mid-transfer and
+# will happily spend 25 attempts on a server that was never going to answer.
+Write-Host "==> Checking the server answers" -ForegroundColor Cyan
+$probe = (Invoke-Native { & ssh @SshOpts -o ConnectTimeout=10 $Server "echo preckon-reachable" }) -join ""
+if ($probe -notmatch "preckon-reachable") {
+  Write-Host "Cannot open a session to $Server." -ForegroundColor Red
+  Write-Host "The SSH error is printed above. Nothing was uploaded." -ForegroundColor Red
+  exit 1
+}
+Write-Host "    $Server answered" -ForegroundColor Green
 
 Write-Host "==> Copying up (resumable)" -ForegroundColor Cyan
 Send-Bundle -Local $Bundle -Remote "/tmp/preckon-tenant.tgz" -Size $size
