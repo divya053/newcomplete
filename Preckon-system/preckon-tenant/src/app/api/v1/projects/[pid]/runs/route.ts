@@ -10,8 +10,23 @@ import { startRun } from "@/lib/runtime";
 export const GET = route<{ pid: string }>(async (_req, ctx, { pid }) => {
   requirePermission(ctx, "workflow.read");
   await requireProject(ctx, pid);
+  /* Step counts travel with the run.
+     The module surfaces poll this list to show a stage's progress, and without
+     the counts a running stage could only say "running" — true for two seconds
+     and for twenty minutes alike, which tells the person watching nothing.
+     Joining here rather than adding a second request keeps one poll per screen;
+     the join is on run_step's (run_id, status) index. */
   const runs = await query(
-    "SELECT id, workflow_key, workflow_version, status, started_at, ended_at FROM workflow_run WHERE tenant_id = ? AND project_id = ? ORDER BY started_at DESC",
+    `SELECT r.id, r.workflow_key, r.workflow_version, r.status, r.started_at, r.ended_at,
+            COUNT(s.id)                                              AS steps_total,
+            COALESCE(SUM(s.status IN ('completed','skipped')), 0)    AS steps_done,
+            COALESCE(SUM(s.status = 'failed'), 0)                    AS steps_failed,
+            MAX(CASE WHEN s.status = 'running' THEN s.agent_key END) AS running_agent
+       FROM workflow_run r
+       LEFT JOIN workflow_run_step s ON s.run_id = r.id AND s.tenant_id = r.tenant_id
+      WHERE r.tenant_id = ? AND r.project_id = ?
+      GROUP BY r.id, r.workflow_key, r.workflow_version, r.status, r.started_at, r.ended_at
+      ORDER BY r.started_at DESC`,
     [ctx.tenantId, pid]
   );
   return ok(runs);

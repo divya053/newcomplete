@@ -10,7 +10,8 @@ import { api } from "@/lib/apiclient";
 import { useCan, useToast, Drawer } from "@/lib/ui";
 import { Icon } from "@/lib/icons";
 import { humanize, typeLabel } from "@/lib/catalog";
-import { confPct } from "@/lib/chain";
+import { confPct, timeAgo } from "@/lib/chain";
+import { fmtClock, fmtTook, epoch } from "@/lib/elapsed";
 import { useI18n, type Key } from "@/lib/i18n";
 import type { ChainStage } from "@/lib/chain";
 
@@ -73,6 +74,108 @@ export function useArtifactActions(pid: string, reload: () => void) {
   }, [pid, reload, toast, t]);
 
   return { confirm, reject, correct, confirmMany, busy };
+}
+
+/* ── How long this stage has been working, and what came of it ─────── */
+
+/**
+ * A clock, ticking only while something is actually running.
+ *
+ * No interval exists on a settled stage: a finished run's duration is
+ * ended_at - started_at, which does not change, and a project page carries up to
+ * nine of these headers.
+ */
+function useTick(live: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!live) return;
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [live]);
+  return now;
+}
+
+/**
+ * What this stage is doing, and since when.
+ *
+ * Replaces a single chip that read "paused — waiting on you". That was wrong in
+ * both directions: it appeared over panels with nothing to confirm, and it never
+ * appeared at all once a run finished — so someone who pressed Run got a chip
+ * for a while, then bare silence, with no way to tell a finished run from one
+ * that had never started. Every state below says what happened and when.
+ */
+export function StageStatus({
+  stage, runs, workflows,
+}: {
+  stage: ChainStage;
+  runs: any[];
+  workflows: { key: string; name: string; moduleKey: string }[];
+}) {
+  const { t } = useI18n();
+  const mineKeys = new Set(workflows.filter((w) => w.moduleKey === stage.key).map((w) => w.key));
+  /* runs arrive newest-first, so find() is the latest of each kind. */
+  const mine = runs.filter((r) => mineKeys.has(r.workflow_key));
+  const active = mine.find((r) => r.status === "running" || r.status === "awaiting_review");
+  const run = active ?? mine[0];
+
+  const running = run?.status === "running";
+  const now = useTick(running);
+
+  if (!run) return null;
+
+  const started = epoch(run.started_at);
+  const ended = epoch(run.ended_at);
+  const total = Number(run.steps_total ?? 0);
+  const done = Number(run.steps_done ?? 0);
+
+  /* Elapsed for a live run; the settled duration otherwise. A run with no
+     ended_at that is no longer running has no honest duration, so it shows
+     none rather than counting up forever against a stopped clock. */
+  const span = started == null ? null : running ? now - started : ended == null ? null : ended - started;
+
+  const parts: React.ReactNode[] = [];
+  const step = total > 0 && (
+    <span key="step" className="sg-step">{t("stage.stepOf", { n: Math.min(done + (running ? 1 : 0), total), total })}</span>
+  );
+
+  if (running) {
+    return (
+      <span className="stagestat">
+        <span className="chip running">{t("stage.running")}</span>
+        {step}
+        {span != null && <span className="sg-clock mono" dir="ltr">{fmtClock(span)}</span>}
+      </span>
+    );
+  }
+
+  if (run.status === "awaiting_review") {
+    /* The count comes from the stage's own artifacts, not the run: it is what
+       the panel below is actually offering. Zero of them is the parked run —
+       named as finished, because that is what it is, and Re-run is right there. */
+    return (
+      <span className="stagestat">
+        {stage.pending > 0
+          ? <span className="chip pending">{t("stage.toReview", { n: stage.pending })}</span>
+          : <span className="chip skipped">{t("stage.nothingToReview")}</span>}
+        {span != null && <span className="sg-when">{t("stage.took", { d: fmtTook(span) })}</span>}
+        <span className="sg-when">{timeAgo(run.ended_at ?? run.started_at)}</span>
+      </span>
+    );
+  }
+
+  const failed = run.status === "failed";
+  return (
+    <span className="stagestat">
+      <span className={"chip " + (failed ? "failed" : "completed")}>
+        {span == null
+          ? t(failed ? "stage.failed" : "stage.completed")
+          : t(failed ? "stage.failedAfter" : "stage.completedIn", { d: fmtTook(span) })}
+      </span>
+      {failed && Number(run.steps_failed ?? 0) > 0 && step}
+      <span className="sg-when">{timeAgo(run.ended_at ?? run.started_at)}</span>
+    </span>
+  );
 }
 
 /* ── Stage header: what this module is, and how to run it ────────────────── */
@@ -139,11 +242,7 @@ export function StageHeader({
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <span className="mono" style={{ fontSize: 10.5, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--slate-400)" }}>{stage.full}</span>
-        {active && (
-          <span className="chip running">
-            {active.status === "awaiting_review" ? t("stage.paused") : t("stage.running")}
-          </span>
-        )}
+        <StageStatus stage={stage} runs={runs} workflows={workflows} />
       </div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
         {right}

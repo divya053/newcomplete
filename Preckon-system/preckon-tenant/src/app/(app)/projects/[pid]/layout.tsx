@@ -6,7 +6,7 @@
 // The layout owns the project's data (artifacts, runs, workflows) and hands it
 // down, so the seven module surfaces don't each re-fetch the same graph.
 
-import { use } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { useApi, Skeleton, ErrorBox, StatusChip } from "@/lib/ui";
@@ -28,7 +28,28 @@ export default function ProjectLayout({ children, params }: { children: React.Re
   const proj = useApi<Project>(`/projects/${pid}`);
   const lc = useApi<Lifecycle>(`/projects/${pid}/lifecycle`, [], { refreshMs: 15000 });
   const artifacts = useApi<any[]>(`/projects/${pid}/artifacts`, [], { refreshMs: 10000 });
-  const runs = useApi<any[]>(`/projects/${pid}/runs`, [], { refreshMs: 10000 });
+  /* A run in flight is the one moment this screen is changing while someone
+     watches it, so the poll tightens to three seconds and drops back when the
+     run settles. Ten is fine for an idle project and far too slow underneath a
+     stage header counting seconds — the clock would tick smoothly and the
+     progress beside it would arrive in ten-second jumps. */
+  const [liveRun, setLiveRun] = useState(false);
+  const runs = useApi<any[]>(`/projects/${pid}/runs`, [], { refreshMs: liveRun ? 3000 : 10000 });
+
+  const anyLive = (runs.data ?? []).some((r) => r.status === "running");
+  useEffect(() => { setLiveRun(anyLive); }, [anyLive]);
+
+  /* The moment a run stops, re-read the artifacts. Without this the stage says
+     "completed in 2m 14s" while the panel underneath still shows what was there
+     before it ran, for up to another ten seconds — the run is announced as
+     finished and its output is not yet on screen. */
+  const wasLive = useRef(anyLive);
+  const reloadArtifacts = artifacts.reload;
+  useEffect(() => {
+    if (wasLive.current && !anyLive) reloadArtifacts();
+    wasLive.current = anyLive;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anyLive]);
   const workflows = useApi<{ key: string; name: string; moduleKey: string }[]>("/workflows");
   const ent = useApi<{ licensedModules: LicensedModule[] }>("/entitlements");
 
