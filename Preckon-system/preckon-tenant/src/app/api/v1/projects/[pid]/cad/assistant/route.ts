@@ -3,6 +3,7 @@ import { route, ok } from "@/lib/http";
 import { requirePermission, requireProject } from "@/lib/context";
 import { actorFromCtx, useCase } from "@/lib/usecase";
 import { errBadRequest } from "@/lib/errors";
+import { meterAssistantCall, usageFrom } from "@/lib/ai/assistant-usage";
 import { runBimAgent2, sharedRules } from "@/lib/bim/agent2";
 import { ToolRegistry } from "@/lib/bim/registry";
 import { applyCadOps, type CadOp } from "@/lib/cad/agent";
@@ -95,13 +96,38 @@ export const POST = route<{ pid: string }>(async (req, ctx, { pid }) => {
   // draws on it, and a deployment may reasonably want one without the other.
   const registry = new ToolRegistry<DxfModel, CadOp>().register(...CAD_TOOLS, ...DRAFTING_TOOLS);
 
+  /* Every turn of the loop passes through here exactly once, which is why the
+     meter lives in the wrapper rather than at the call sites. The worker's
+     /claude proxy cannot record this itself - it holds the API key precisely so
+     that it holds nothing else, and a process with no database cannot append to
+     a ledger. Core has the tenant, the project and the rate card, so Core writes
+     the row. */
+  let turn = 0;
   const callAnthropic = async (r: any) => {
+    turn += 1;
+    const startedAt = Date.now();
     const res = await fetch(`${WORKER}/claude`, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
       body: JSON.stringify(r),
     });
     const json = await res.json().catch(() => null);
+    /* Metered before the throw. A turn that errored still burned the input
+       tokens it sent, and leaving those out understates the bill in exactly the
+       cases someone is most likely to be investigating. */
+    await meterAssistantCall({
+      tenantId: ctx.tenantId,
+      projectId: pid,
+      module: "drawlogix",
+      taskType: "cad.assistant",
+      attempt: turn,
+      providerModel: MODEL,
+      tier: "deep",
+      usage: usageFrom(json),
+      latencyMs: Date.now() - startedAt,
+      ok: res.ok,
+      errorCode: res.ok ? null : String(res.status),
+    });
     if (!res.ok) {
       // Nearly always a worker with no API key. Say that, rather than handing a
       // bare 503 to somebody in the middle of marking up a drawing.

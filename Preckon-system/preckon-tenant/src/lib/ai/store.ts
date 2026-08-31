@@ -17,7 +17,7 @@ import { newId } from "../ids";
 import { logWarn } from "../log";
 import { defaultPolicy, type TenantPolicy } from "./policy";
 import type { ModelEntry } from "./registry";
-import type { Spend } from "./budget";
+import { costMinor as priceOf, type Spend } from "./budget";
 
 /** MySQL JSON arrives parsed on some drivers and as text on others. */
 function asJson<T>(value: unknown, fallback: T): T {
@@ -157,6 +157,46 @@ export interface UsageRow {
   validationStatus?: string | null;
   outcome: "succeeded" | "failed" | "rejected" | "cancelled";
   errorCode?: string | null;
+}
+
+/* Shared with the job runner AND the drawing-assistant routes, deliberately.
+   Two writers pricing the same tokens by two paths is how a ledger starts
+   disagreeing with itself. Moved here from jobs.ts, where it was private, when
+   the BIM assistant's spend turned out to reach Anthropic without ever reaching
+   this table. */
+export /**
+ * Price a job's real token usage against the model registry.
+ *
+ * Costing belongs here, not in the worker. The worker has no database and so no
+ * rate card; it used to return a flat cost_minor of 8 for every job, which made
+ * the bill a constant rather than a measurement. It now reports tokens only.
+ *
+ * Falls back to 0 rather than to a guessed rate: a zero is visibly wrong on the
+ * usage page and invites someone to register the model, whereas an invented
+ * price looks exactly like a real one and never gets questioned.
+ */
+async function priceUsage(
+  alias: string | null,
+  usage: { input_tokens?: number; output_tokens?: number; cached_input_tokens?: number } | undefined,
+): Promise<number> {
+  const inputTokens = Number(usage?.input_tokens ?? 0);
+  const outputTokens = Number(usage?.output_tokens ?? 0);
+  if (!alias || (inputTokens <= 0 && outputTokens <= 0)) return 0;
+  try {
+    const registry = await loadRegistry();
+    const card = registry.find((m) => m.alias === alias)?.rateCard;
+    if (!card) {
+      logWarn("ai.cost.no_rate_card", { alias });
+      return 0;
+    }
+    return priceOf(
+      { inputTokens, outputTokens, cachedInputTokens: Number(usage?.cached_input_tokens ?? 0) },
+      card,
+    );
+  } catch (e) {
+    logWarn("ai.cost.price_failed", { alias, error: String(e) });
+    return 0;
+  }
 }
 
 /**
