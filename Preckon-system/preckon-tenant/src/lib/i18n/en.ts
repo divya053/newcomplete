@@ -1063,6 +1063,70 @@ export const en = {
   "team.roleSaveFail": "Couldn’t save the role",
   "team.createRole": "Create role",
   "team.saveRole": "Save role",
+  /* ── What a role can do, in words a person recognises ─────────────────────
+     The role editor used to headline the permission KEY and trail the
+     explanation after a dash, so the first thing read was a database key.
+     These are the labels that replaced it; the key is still available behind
+     "Show permission keys" for anyone who wants it.
+
+     A pack can add a permission this list has never seen, so a missing entry
+     falls back to the catalog's own description rather than showing the key. */
+  "permDomain.admin": "Workspace administration",
+  "permDomain.artifact": "Proposals and review",
+  "permDomain.billing": "Plan and billing",
+  "permDomain.library": "Reference data",
+  "permDomain.project": "Projects",
+  "permDomain.tenant": "Ownership",
+  "permDomain.tender": "Tenders",
+  "permDomain.workflow": "Automation",
+
+  "perm.admin.branding": "Change branding",
+  "permHint.admin.branding": "Logo and brand colour for the whole workspace",
+  "perm.admin.settings": "Change workspace settings",
+  "permHint.admin.settings": "Includes the confidence threshold for auto-accepting proposals",
+  "perm.admin.users": "Manage people and roles",
+  "perm.artifact.confirm": "Approve or reject proposals",
+  "permHint.artifact.confirm": "The decision that turns a proposal into project data",
+  "perm.artifact.edit": "Correct a proposal",
+  "permHint.artifact.edit": "Saves a new version and marks anything derived from it stale",
+  "perm.artifact.read": "See proposals and the review queue",
+  "perm.billing.view": "See the plan and what it costs",
+  "perm.library.manage": "Edit rate books and standards",
+  "perm.library.read": "Use rate books and standards",
+  "perm.project.archive": "Archive and restore projects",
+  "perm.project.create": "Create projects",
+  "perm.project.member.manage": "Add and remove project members",
+  "perm.project.read": "Open projects they are a member of",
+  "perm.project.read_all": "Open every project in the workspace",
+  "permHint.project.read_all": "Bypasses project membership entirely",
+  "perm.project.update": "Edit project details",
+  "perm.tenant.transfer_ownership": "Transfer ownership",
+  "permHint.tenant.transfer_ownership": "Hands the Owner role to someone else. There is one Owner",
+  "perm.bid.approve": "Authorise a tender for submission",
+  "permHint.bid.approve": "The last gate before a bid leaves the building",
+  "perm.workflow.read": "See runs and agents",
+  "perm.workflow.run": "Run, cancel and re-run workflows",
+
+  "role.owner": "Owner",
+  "role.admin": "Admin",
+  "role.estimator": "Estimator",
+  "role.precon_lead": "Precon Lead",
+  "role.qs_reviewer": "QS / Reviewer",
+  "role.viewer": "Viewer",
+
+  "tierHint.owner_admin": "Runs the workspace. People, billing and settings",
+  "tierHint.delivery": "Does the work. Creates and edits, on their own projects",
+  "tierHint.review": "Checks the work. Approves proposals and authorises bids",
+  "tierHint.view": "Reads only. Changes nothing",
+
+  "team.permSearch": "Search permissions",
+  "team.permNone": "No permission matches \u201c{q}\u201d",
+  "team.showKeys": "Show keys",
+  "team.selectAll": "All",
+  "team.clearGroup": "None",
+  "team.permNoneChosen": "Nothing selected yet \u2014 this role could sign in and see nothing",
+  "team.tierLocked": "Fixed once the role exists: changing it would silently re-scope everyone already assigned to it",
+
   "tier.owner_admin": "Owner / Admin",
   "tier.delivery": "Delivery",
   "tier.review": "Review",

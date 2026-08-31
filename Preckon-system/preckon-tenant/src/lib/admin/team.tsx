@@ -4,6 +4,7 @@ import { useApi, useCan, useToast, Skeleton, EmptyState, StatusChip, Drawer, Fie
 import { api } from "@/lib/apiclient";
 import { Icon } from "@/lib/icons";
 import { useI18n, type Key } from "@/lib/i18n";
+import { permLabel, permHint, domainLabel, roleLabel, tierHint } from "./permission-labels";
 
 const TIERS = ["owner_admin", "delivery", "review", "view"];
 const tierLabel = (t: (k: Key) => string, tier: string) => t(("tier." + tier) as Key);
@@ -89,7 +90,7 @@ export default function TeamAdmin() {
             <tbody>
               {roleList.map((r) => (
                 <tr key={r.id}>
-                  <td className="t-name">{r.name}{r.is_system ? <span className="chip plain" style={{ marginLeft: 6, color: "var(--teal-press)", background: "var(--teal-tint)" }}>{t("team.systemChip")}</span> : null}</td>
+                  <td className="t-name">{roleLabel(t, r)}{r.is_system ? <span className="chip plain" style={{ marginLeft: 6, color: "var(--teal-press)", background: "var(--teal-tint)" }}>{t("team.systemChip")}</span> : null}</td>
                   <td className="mono" style={{ fontSize: 12 }}>{r.key}</td>
                   <td style={{ fontSize: 12.5 }}>{tierLabel(t, r.tier)}</td>
                   <td className="r num">{r.permissions}</td>
@@ -138,7 +139,30 @@ function AddUserDrawer({ roles, onClose, onDone, toast, t }: any) {
   const [email, setEmail] = useState(""); const [name, setName] = useState("");
   const [pw, setPw] = useState(""); const [sel, setSel] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  const [q, setQ] = useState("");
+  const [showKeys, setShowKeys] = useState(false);
   const toggle = (k: string) => setSel((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
+  /** Whole group on or off. Nineteen checkboxes is a lot of clicking for
+      "this role can do everything with projects". */
+  const setMany = (keys: string[], on: boolean) =>
+    setSel((s) => { const n = new Set(s); for (const k of keys) on ? n.add(k) : n.delete(k); return n; });
+
+  /* Search matches what is ON SCREEN as well as the key underneath, so typing
+     "approve" finds bid.approve and artifact.confirm - which is how someone
+     who does not know the keys would look for them. Groups that end up empty
+     are dropped rather than left as bare headings. */
+  const shown = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return permsByDomain;
+    const hit = (p: any) =>
+      p.key.toLowerCase().includes(needle) ||
+      String(p.description ?? "").toLowerCase().includes(needle) ||
+      permLabel(t, p.key, p.description).toLowerCase().includes(needle) ||
+      (permHint(t, p.key) ?? "").toLowerCase().includes(needle);
+    return permsByDomain
+      .map(([d, list]: any) => [d, list.filter(hit)])
+      .filter(([, list]: any) => list.length > 0);
+  }, [q, permsByDomain, t]);
   async function submit() {
     if (!email.trim()) return; setBusy(true);
     try {
@@ -197,28 +221,73 @@ function RoleDrawer({ drawer, permsByDomain, onClose, onDone, toast, t }: any) {
       <Field label={t("team.roleName")}><input value={name} onChange={(e) => setName(e.target.value)} /></Field>
       {!editing && (
         <Field label={t("team.tier")}>
-          <select value={tier} onChange={(e) => setTier(e.target.value)} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid var(--hairline)", background: "var(--panel)", color: "var(--ink)" }}>
+          <select value={tier} onChange={(e) => setTier(e.target.value)} className="rd-select">
             {TIERS.map((tr) => <option key={tr} value={tr}>{tierLabel(t, tr)}</option>)}
           </select>
+          {/* What the tier actually means. It decides the ceiling on what this
+              role may ever be granted, which is not something to infer from the
+              word "Delivery". */}
+          {tierHint(t, tier) && <p className="rd-hint">{tierHint(t, tier)}</p>}
         </Field>
       )}
-      <Field label={t("team.permissionsCount", { n: sel.size })}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: 360, overflowY: "auto" }}>
-          {permsByDomain.map(([domain, list]: any) => (
-            <div key={domain}>
-              <div className="mono" style={{ fontSize: 10, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--slate-400)", marginBottom: 5 }}>{domain}</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                {list.map((p: any) => (
-                  <label key={p.key} style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12.5 }}>
-                    <input type="checkbox" checked={sel.has(p.key)} onChange={() => toggle(p.key)} style={{ width: "auto", marginTop: 2 }} />
-                    <span><span className="mono" style={{ fontSize: 11.5, color: "var(--ink)" }}>{p.key}</span> <span className="csub">— {p.description}</span></span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          ))}
+
+      <div className="rd-perms">
+        <div className="rd-permhead">
+          <span className="rd-permcount">{t("team.permissionsCount", { n: sel.size })}</span>
+          {/* The key is an identifier, not a label. Off by default; one click
+              away for an administrator who needs to match it against a policy. */}
+          <label className="rd-keys">
+            <input type="checkbox" checked={showKeys} onChange={() => setShowKeys((v) => !v)} />
+            {t("team.showKeys")}
+          </label>
         </div>
-      </Field>
+
+        <input
+          className="rd-search"
+          type="search"
+          value={q}
+          placeholder={t("team.permSearch")}
+          onChange={(e) => setQ(e.target.value)}
+          aria-label={t("team.permSearch")}
+        />
+
+        {sel.size === 0 && !q && <p className="rd-warn">{t("team.permNoneChosen")}</p>}
+
+        {/* One scroll, not two. This list used to carry maxHeight:360 with its
+            own overflow INSIDE the drawer body, which already scrolls - so a
+            long list sat in a letterbox with empty drawer beneath it. */}
+        {shown.length === 0 ? (
+          <p className="rd-warn">{t("team.permNone", { q })}</p>
+        ) : shown.map(([domain, list]: any) => {
+          const keys = list.map((p: any) => p.key);
+          const on = keys.filter((k: string) => sel.has(k)).length;
+          return (
+            <section key={domain} className="rd-group">
+              <div className="rd-grouphead">
+                <h4>{domainLabel(t, domain)}</h4>
+                <span className="rd-groupn">{on}/{keys.length}</span>
+                <button type="button" className="rd-linkbtn" onClick={() => setMany(keys, true)}>{t("team.selectAll")}</button>
+                <button type="button" className="rd-linkbtn" onClick={() => setMany(keys, false)}>{t("team.clearGroup")}</button>
+              </div>
+              {list.map((p: any) => {
+                const hint = permHint(t, p.key);
+                return (
+                  <label key={p.key} className={"rd-perm" + (sel.has(p.key) ? " on" : "")}>
+                    <input type="checkbox" checked={sel.has(p.key)} onChange={() => toggle(p.key)} />
+                    <span className="rd-permtext">
+                      <span className="rd-permname">{permLabel(t, p.key, p.description)}</span>
+                      {hint && <span className="rd-permhint">{hint}</span>}
+                      {/* dir="ltr": a permission key is an identifier and must
+                          not reorder under Arabic. */}
+                      {showKeys && <span className="mono rd-permkey" dir="ltr">{p.key}</span>}
+                    </span>
+                  </label>
+                );
+              })}
+            </section>
+          );
+        })}
+      </div>
     </Drawer>
   );
 }
