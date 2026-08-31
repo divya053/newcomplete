@@ -33,6 +33,34 @@ export const auth = betterAuth({
   rateLimit: {
     customRules: {
       "/sign-in/email": { window: 60, max: Number(process.env.AUTH_SIGNIN_MAX ?? 3) },
+      // Sends mail to an address the requester names. Unthrottled, it is a way
+      // to have us repeatedly mail somebody on request.
+      "/forget-password": { window: 300, max: 3 },
+      "/request-password-reset": { window: 300, max: 3 },
+      "/reset-password": { window: 300, max: 5 },
+      "/two-factor/verify-totp": { window: 300, max: 6 },
+    },
+  },
+
+  /* WHO a request came from, which decides whose bucket it counts against.
+   *
+   * The limiter above is keyed on the client IP, and behind nginx every socket
+   * says 127.0.0.1. Better Auth then does what it warns it will do: "falls back
+   * to a single shared per-path bucket."
+   *
+   * One bucket for everybody is worse than none. Three sign-ins a minute shared
+   * across a whole construction firm means one script locks out every estimator
+   * in the company, and a credential-stuffing run looks identical to Monday
+   * morning.
+   *
+   * These two headers are safe to trust HERE and nowhere else: this app binds
+   * to 127.0.0.1, so nginx is the only thing that can reach it, so the only
+   * x-real-ip it can ever see is one nginx wrote. x-real-ip first, because it
+   * is a single address where x-forwarded-for is a list a client can prepend
+   * to. */
+  advanced: {
+    ipAddress: {
+      ipAddressHeaders: ["x-real-ip", "x-forwarded-for"],
     },
   },
   /* Second factor: TOTP, with single-use backup codes.
