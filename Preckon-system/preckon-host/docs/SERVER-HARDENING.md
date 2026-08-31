@@ -1,7 +1,41 @@
 # Server hardening runbook
 
 Written after a scan of the production host found nine services listening on
-`0.0.0.0` and no firewall running.
+`0.0.0.0` and no firewall running **on the host**.
+
+## Correction, and what it changes
+
+An earlier version of this document said those services were reachable from the
+internet. They are not. Testing from outside, with 22/80/443 as controls to
+prove the test works, shows everything else filtered:
+
+```
+22     OPEN          3306   filtered
+80     OPEN          3100   filtered
+443    OPEN          5000   filtered
+                     9090   filtered
+                    11434   filtered
+```
+
+Something upstream of the host — almost certainly the provider's network
+firewall — already permits only those three. The original claim came from
+running `curl` against `127.0.0.1:11434` **on the server**, which proves a
+service is bound to all interfaces and proves nothing about who can reach it.
+
+That is a real difference in urgency and it is worth being exact about. What
+stays true:
+
+- A wildcard bind exposes a service to anything that reaches the host's
+  interface — a neighbouring machine on the provider's network, and any process
+  or container on the box.
+- The only thing standing between an unauthenticated database and the internet
+  is a firewall rule in someone else's console, which no one on this team can
+  see in the repository and which no deploy re-asserts.
+- The day that rule is changed, widened, or lost in a migration, every one of
+  those ports is live with no second layer behind it.
+
+So the steps below are still worth doing, as the second layer rather than the
+first. Treat them as important, not as an emergency.
 
 The repository half of this is already done — every port either compose file
 publishes now binds to `127.0.0.1`, and the console sends a full set of security
@@ -31,11 +65,13 @@ services that are *not* containers.
 
 ---
 
-## 1. Ollama — open to the internet, no authentication
+## 1. Ollama — bound to every interface, no authentication
 
-`11434` answers anyone on the internet with your model list, and will run
-inference for them at your expense. Ollama has no auth of its own, so the only
-control is the bind address.
+`11434` answers **anything that reaches the host's interface** with the model
+list, and will run inference for it. It is filtered at the provider edge today,
+so this is not currently reachable from the internet — but Ollama has no
+authentication of its own, so the bind address is the only control that belongs
+to us.
 
 ```bash
 systemctl edit ollama
@@ -55,8 +91,8 @@ systemctl restart ollama
 ss -tlnp | grep 11434          # expect 127.0.0.1:11434, not *:11434
 ```
 
-Do this one first. It is the only service on the list that hands a stranger free
-compute.
+Do this one first: it is the only service on the list with no authentication of
+any kind, so it is the one with nothing behind the firewall rule.
 
 ---
 
