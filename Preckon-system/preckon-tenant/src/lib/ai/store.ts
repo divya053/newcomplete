@@ -164,7 +164,7 @@ export interface UsageRow {
    disagreeing with itself. Moved here from jobs.ts, where it was private, when
    the BIM assistant's spend turned out to reach Anthropic without ever reaching
    this table. */
-export /**
+/**
  * Price a job's real token usage against the model registry.
  *
  * Costing belongs here, not in the worker. The worker has no database and so no
@@ -175,7 +175,7 @@ export /**
  * usage page and invites someone to register the model, whereas an invented
  * price looks exactly like a real one and never gets questioned.
  */
-async function priceUsage(
+export async function priceUsage(
   alias: string | null,
   usage: { input_tokens?: number; output_tokens?: number; cached_input_tokens?: number } | undefined,
 ): Promise<number> {
