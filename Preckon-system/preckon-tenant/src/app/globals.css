@@ -552,6 +552,61 @@ td.num{font-family:var(--font-mono); color:var(--ink);}
 
 /* ---------- COPILOT DRAWER ---------- */
 .drawer.cop{width:420px;}
+
+/* ── Role editor ──────────────────────────────────────────────────────────────
+   The permission list used to headline the database key in mono and trail the
+   explanation after a dash, inside a 360px box with its own scrollbar nested in
+   the drawer's. So the first thing read was `admin.branding`, and a long list
+   sat in a letterbox with empty drawer underneath it.
+
+   Now: the sentence is the label, the key is opt-in, and the list flows into
+   the drawer's own scroll. Logical properties throughout - this surface is
+   translated, so it renders right-to-left. */
+.rd-select{width:100%; padding:8px 10px; border-radius:8px; border:1px solid var(--hairline);
+  background:var(--panel); color:var(--ink); font:inherit; font-size:13px;}
+.rd-hint{margin:6px 0 0; font-size:12px; line-height:1.45; color:var(--slate-400);}
+
+.rd-perms{display:flex; flex-direction:column; gap:10px; margin-top:18px;}
+.rd-permhead{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+.rd-permcount{font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase;
+  color:var(--slate-400); margin-inline-end:auto;}
+.rd-keys{display:inline-flex; align-items:center; gap:6px; font-size:11.5px;
+  color:var(--slate-400); cursor:pointer; white-space:nowrap;}
+.rd-keys input{width:auto; margin:0;}
+.rd-keys:hover{color:var(--ink);}
+
+.rd-search{width:100%; padding:7px 10px; border-radius:8px; border:1px solid var(--hairline);
+  background:var(--panel); color:var(--ink); font:inherit; font-size:12.5px;}
+
+.rd-warn{margin:0; padding:10px 12px; border-radius:8px; background:var(--panel-2);
+  border:1px solid var(--hairline); font-size:12px; line-height:1.5; color:var(--slate-400);}
+
+.rd-group{display:flex; flex-direction:column; gap:2px;}
+.rd-grouphead{display:flex; align-items:center; gap:8px; padding:10px 0 6px;
+  border-block-end:1px solid var(--hairline); margin-block-end:4px;}
+.rd-grouphead h4{margin:0; font-size:12.5px; font-weight:600; color:var(--ink); letter-spacing:-.005em;}
+.rd-groupn{font-family:var(--font-mono); font-size:10.5px; color:var(--slate-400);
+  font-variant-numeric:tabular-nums; margin-inline-end:auto;}
+.rd-linkbtn{background:none; border:0; padding:2px 4px; cursor:pointer; font:inherit;
+  font-size:11px; color:var(--slate-400); border-radius:4px;}
+.rd-linkbtn:hover{color:var(--brand); background:var(--panel-2);}
+
+/* The whole row is the hit target, not the 13px checkbox. */
+.rd-perm{display:flex; gap:9px; align-items:flex-start; padding:7px 8px; border-radius:7px;
+  cursor:pointer; border:1px solid transparent;}
+.rd-perm:hover{background:var(--panel-2);}
+.rd-perm.on{background:var(--teal-tint); border-color:color-mix(in srgb, var(--brand) 28%, transparent);}
+.rd-perm input{width:auto; margin:2px 0 0; flex:none;}
+.rd-permtext{display:flex; flex-direction:column; gap:2px; min-inline-size:0;}
+.rd-permname{font-size:13px; line-height:1.4; color:var(--ink);}
+.rd-permhint{font-size:11.5px; line-height:1.45; color:var(--slate-400);}
+.rd-permkey{font-size:10.5px; color:var(--slate-400); margin-block-start:2px;}
+
+/* Selection is carried by the tick and the label, never by the tint alone -
+   the row still reads as chosen with no colour at all. */
+@media (forced-colors: active){
+  .rd-perm.on{border-color:Highlight;}
+}
 .cop .msgs{flex:1; overflow-y:auto; padding:18px 20px; display:flex; flex-direction:column; gap:14px;}
 .cop .m{max-width:88%;} .cop .m.u{align-self:flex-end;}
 .cop .m .bub{padding:11px 13px; border-radius:12px; font-size:13px; line-height:1.5;}

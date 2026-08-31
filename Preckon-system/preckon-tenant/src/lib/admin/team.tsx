@@ -139,30 +139,7 @@ function AddUserDrawer({ roles, onClose, onDone, toast, t }: any) {
   const [email, setEmail] = useState(""); const [name, setName] = useState("");
   const [pw, setPw] = useState(""); const [sel, setSel] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
-  const [q, setQ] = useState("");
-  const [showKeys, setShowKeys] = useState(false);
   const toggle = (k: string) => setSel((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
-  /** Whole group on or off. Nineteen checkboxes is a lot of clicking for
-      "this role can do everything with projects". */
-  const setMany = (keys: string[], on: boolean) =>
-    setSel((s) => { const n = new Set(s); for (const k of keys) on ? n.add(k) : n.delete(k); return n; });
-
-  /* Search matches what is ON SCREEN as well as the key underneath, so typing
-     "approve" finds bid.approve and artifact.confirm - which is how someone
-     who does not know the keys would look for them. Groups that end up empty
-     are dropped rather than left as bare headings. */
-  const shown = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    if (!needle) return permsByDomain;
-    const hit = (p: any) =>
-      p.key.toLowerCase().includes(needle) ||
-      String(p.description ?? "").toLowerCase().includes(needle) ||
-      permLabel(t, p.key, p.description).toLowerCase().includes(needle) ||
-      (permHint(t, p.key) ?? "").toLowerCase().includes(needle);
-    return permsByDomain
-      .map(([d, list]: any) => [d, list.filter(hit)])
-      .filter(([, list]: any) => list.length > 0);
-  }, [q, permsByDomain, t]);
   async function submit() {
     if (!email.trim()) return; setBusy(true);
     try {
@@ -206,7 +183,32 @@ function RoleDrawer({ drawer, permsByDomain, onClose, onDone, toast, t }: any) {
   const [tier, setTier] = useState(editing ? drawer.role.tier : "delivery");
   const [sel, setSel] = useState<Set<string>>(new Set(editing && drawer.role.permission_keys ? String(drawer.role.permission_keys).split(",").filter(Boolean) : []));
   const [busy, setBusy] = useState(false);
+  const [q, setQ] = useState("");
+  const [showKeys, setShowKeys] = useState(false);
   const toggle = (k: string) => setSel((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
+  /** Whole group on or off. Nineteen checkboxes is a lot of clicking for
+      "this role can do everything with projects". */
+  const setMany = (keys: string[], on: boolean) =>
+    setSel((s) => { const n = new Set(s); for (const k of keys) on ? n.add(k) : n.delete(k); return n; });
+
+  /* Search matches what is ON SCREEN as well as the key underneath, so typing
+     "approve" finds bid.approve and artifact.confirm - which is how someone
+     who does not know the keys would look for them. Groups that end up empty
+     are dropped rather than left as bare headings. */
+  const shown = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return permsByDomain;
+    const hit = (p: any) =>
+      p.key.toLowerCase().includes(needle) ||
+      String(p.description ?? "").toLowerCase().includes(needle) ||
+      permLabel(t, p.key, p.description).toLowerCase().includes(needle) ||
+      (permHint(t, p.key) ?? "").toLowerCase().includes(needle);
+    return permsByDomain
+      .map(([d, list]: any) => [d, list.filter(hit)])
+      .filter(([, list]: any) => list.length > 0);
+  }, [q, permsByDomain, t]);
+
+
   async function submit() {
     if (!name.trim()) return; setBusy(true);
     try {
