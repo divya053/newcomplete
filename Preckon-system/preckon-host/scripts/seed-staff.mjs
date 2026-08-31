@@ -30,7 +30,13 @@ const conn = await mysql.createConnection({
 async function ensureAuthUser(email, name) {
   const res = await fetch(`${BASE}/api/auth/sign-up/email`, {
     method: "POST",
-    headers: { "content-type": "application/json", Origin: BASE },
+    // Registration is closed to the internet; the seed identifies itself with
+    // the shared internal token. See src/middleware.ts.
+    headers: {
+      "content-type": "application/json",
+      Origin: BASE,
+      "x-internal-token": process.env.INTERNAL_SERVICE_TOKEN ?? "",
+    },
     body: JSON.stringify({ email, password: PASSWORD, name }),
   }).catch((e) => { throw new Error(`Could not reach ${BASE} — is the app running? (${e.message})`); });
   if (res.ok) return (await res.json()).user?.id;

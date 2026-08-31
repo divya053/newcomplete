@@ -30,7 +30,13 @@ async function ensureAuthUser() {
   const res = await fetch(`${BASE}/api/auth/sign-up/email`, {
     method: "POST",
     // Better Auth CSRF-checks the Origin against BETTER_AUTH_URL.
-    headers: { "content-type": "application/json", Origin: BASE },
+    // Registration is closed to the internet; the seed identifies itself with
+    // the shared internal token. See src/middleware.ts.
+    headers: {
+      "content-type": "application/json",
+      Origin: BASE,
+      "x-internal-token": process.env.INTERNAL_SERVICE_TOKEN ?? "",
+    },
     body: JSON.stringify({ email, password, name }),
   }).catch((e) => {
     throw new Error(

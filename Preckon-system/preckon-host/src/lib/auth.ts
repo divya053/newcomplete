@@ -57,6 +57,53 @@ export const auth = betterAuth({
     expiresIn: 60 * 60 * 12, // 12h, mirrors security.session_max_hours default
     updateAge: 60 * 60,
   },
+
+  /* WHO a request came from.
+   *
+   * Rate limiting is keyed on the client IP, and behind nginx the socket
+   * address is always 127.0.0.1. Better Auth says what happens then, in its own
+   * words: "Rate limiting could not determine a client IP and is falling back
+   * to a single shared per-path bucket."
+   *
+   * One bucket for everybody is worse than none. Three sign-in attempts per ten
+   * seconds shared across the whole company means one script locks out every
+   * member of staff, and a brute-force attempt is indistinguishable from the
+   * morning rush.
+   *
+   * nginx already sets both of these headers on every proxied request. They are
+   * safe to trust HERE and nowhere else: the app binds to 127.0.0.1, so nginx
+   * is the only thing that can reach it, so the only X-Real-IP it can ever see
+   * is one nginx wrote. x-real-ip first — it is a single address, where
+   * x-forwarded-for is a list a client can prepend to. */
+  advanced: {
+    ipAddress: {
+      ipAddressHeaders: ["x-real-ip", "x-forwarded-for"],
+    },
+  },
+
+  /* Enabled by default in production, but stated here so it is visible and so
+   * the sign-in rule is ours rather than inherited.
+   *
+   * 5 per minute on sign-in, against a default of 3 per 10 seconds. Slower over
+   * a minute (a password sprayer gets 5 tries, not 18) and kinder to a person
+   * who mistypes twice and then reaches for their password manager.
+   *
+   * Password reset is the tightest: it sends mail to an address the requester
+   * names, so an unthrottled endpoint is a way to have us mail somebody
+   * repeatedly on request. */
+  rateLimit: {
+    enabled: true,
+    window: 60,
+    max: 60,
+    customRules: {
+      "/sign-in/email": { window: 60, max: 5 },
+      "/sign-up/email": { window: 60, max: 3 },
+      "/forget-password": { window: 300, max: 3 },
+      "/request-password-reset": { window: 300, max: 3 },
+      "/reset-password": { window: 300, max: 5 },
+      "/change-password": { window: 300, max: 5 },
+    },
+  },
 });
 
 export type Auth = typeof auth;

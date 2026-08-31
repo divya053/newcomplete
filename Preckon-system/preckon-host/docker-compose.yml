@@ -80,6 +80,9 @@ services:
       DATABASE_PASSWORD: preckon
       DATABASE_NAME: preckon_host
       BETTER_AUTH_URL: http://app:3000
+      # The seed creates the first Owner through the sign-up endpoint, which is
+      # closed to everything that cannot present this. Must match the app's.
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-change-me-service-token}
       OWNER_EMAIL: admin@techsme.com
       OWNER_PASSWORD: preckon-admin-2026
     # Create the Owner staff account, then register the demo tenant (matching the
