@@ -134,7 +134,14 @@ services:
       - uploads:/app/.uploads
       - downloads:/app/.downloads
     ports:
-      - "3100:3000"
+      # Loopback only. nginx terminates TLS and proxies from 127.0.0.1, so
+      # binding the wildcard published nothing nginx needed and everything a
+      # scanner did - including a route to the app that skips TLS entirely.
+      #
+      # This MUST be fixed here and not with a firewall rule: Docker writes its
+      # own iptables rules ahead of ufw's, so `ufw deny` on a published port
+      # does not close it. The bind address is the control that works.
+      - "127.0.0.1:3100:3000"
 
   # One-off: register the construction pack + seed the demo tenant/owner/project.
   #   docker compose run --rm seed

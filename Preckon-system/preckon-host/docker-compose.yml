@@ -15,7 +15,10 @@ services:
       MYSQL_ROOT_PASSWORD: preckon
       MYSQL_DATABASE: preckon_host
     ports:
-      - "3307:3306"
+      # The console's MySQL was published on the wildcard address - reachable
+      # from the internet on port 3307. Nothing outside this host has any
+      # business opening a connection to it.
+      - "127.0.0.1:3307:3306"
     volumes:
       - db_data:/var/lib/mysql
       # Schema + seed run once, on first init, in filename order.
@@ -51,7 +54,14 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "3000:3000"
+      # Loopback only. nginx terminates TLS and proxies from 127.0.0.1, so
+      # binding the wildcard published nothing nginx needed and everything a
+      # scanner did - including a route to the app that skips TLS entirely.
+      #
+      # This MUST be fixed here and not with a firewall rule: Docker writes its
+      # own iptables rules ahead of ufw's, so `ufw deny` on a published port
+      # does not close it. The bind address is the control that works.
+      - "127.0.0.1:3000:3000"
 
   # One-off helper: create the first Owner staff account against the running app.
   # Uses the full build image (has dev deps + scripts). Run with:
