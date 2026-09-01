@@ -125,12 +125,57 @@ foreach ($t in $Targets) {
                 $merge = Invoke-Git @('merge', "$($t.Remote)/main", '--no-edit',
                                       '-m', "Merge $($t.Remote)/main, so changes made on GitHub survive this mirror")
                 if ($merge -ne 0) {
-                    # A real conflict. Stopping is correct: the alternative is
-                    # deciding on somebody's behalf which side of an edit wins.
                     Invoke-Git @('merge', '--abort') | Out-Null
-                    Write-Log 'WARN' "$name : merge conflict with $($t.Remote)/main - NOT pushed. Resolve by hand."
-                    $failed++
-                    continue
+
+                    <# Unrelated histories cannot be merged, ever - it is not a
+                       transient failure and retrying nightly will never clear
+                       it. preckon-host is in exactly that state: its history
+                       was created independently of this monorepo, so git
+                       refuses outright.
+
+                       For that case only, publish the other way round: start
+                       FROM the remote tip and lay the subtree's content on top
+                       as one ordinary commit. The remote's history is preserved
+                       and extended, the push is a fast-forward, and files that
+                       exist only on the remote survive because an overlay adds
+                       and updates but never deletes.
+
+                       This is safe ONLY while the monorepo is the authority on
+                       shared files - an overlay reverts a remote edit to a file
+                       the monorepo also has. That is why the host's Next.js
+                       version and its capture-shapes hardening were pulled into
+                       the monorepo before this path was switched on. If someone
+                       edits a shared file on GitHub again, bring it back here
+                       first or this will quietly undo it. #>
+                    $unrelated = (git merge "$($t.Remote)/main" --no-edit 2>&1 |
+                                  Select-String -Pattern 'unrelated histories' -Quiet)
+                    Invoke-Git @('merge', '--abort') | Out-Null
+
+                    if (-not $unrelated) {
+                        # A real content conflict. Stopping is correct: the
+                        # alternative is deciding on somebody's behalf which
+                        # side of an edit wins, on a timer, with nobody reading.
+                        Write-Log 'WARN' "$name : merge conflict with $($t.Remote)/main - NOT pushed. Resolve by hand."
+                        $failed++
+                        continue
+                    }
+
+                    Invoke-Git @('checkout', '-q', '-B', "$branch-overlay", "$($t.Remote)/main") | Out-Null
+                    $prefixPath = Join-Path $Repo $t.Prefix
+                    # Tracked files only: git archive of the subtree, so no
+                    # node_modules, no .next, nothing .gitignore'd.
+                    Push-Location $Repo
+                    try { & git archive "HEAD:$($t.Prefix)" | & tar -x -C $tree }
+                    finally { Pop-Location }
+
+                    Invoke-Git @('add', '-A') | Out-Null
+                    if ((git diff --cached --name-only | Measure-Object -Line).Lines -eq 0) {
+                        Write-Log 'OK' "$name : already current (nothing to overlay)"
+                        Set-Content -Path $stampFile -Value $localTip -Encoding utf8
+                        continue
+                    }
+                    Invoke-Git @('commit', '-q', '-m',
+                                 "Sync $name from the monorepo`n`nHistories are unrelated, so this is an overlay on top of this repository's own history rather than a merge. Files that exist only here are untouched.") | Out-Null
                 }
             }
 

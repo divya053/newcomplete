@@ -10,7 +10,15 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
 const BASE = process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
 const email = process.env.OWNER_EMAIL ?? "admin@techsme.com";
-const password = process.env.OWNER_PASSWORD ?? "preckon-admin-2026";
+// Security rule: no reusable/default password is stored in source. The caller
+// must provide OWNER_PASSWORD explicitly, including for local runs — the same
+// rule seed-owner.mjs and seed-staff.mjs already follow. A fallback here is
+// worth no less than a fallback there: this script signs in as the owner.
+const password = process.env.OWNER_PASSWORD;
+if (!password || password.length < 12) {
+  console.error("✖ OWNER_PASSWORD is required and must be at least 12 characters.");
+  process.exit(1);
+}
 const SVC = process.env.INTERNAL_SERVICE_TOKEN ?? "dev-internal-service-token";
 const T1 = "10000000-0000-4000-8000-000000000001"; // Cedar
 
