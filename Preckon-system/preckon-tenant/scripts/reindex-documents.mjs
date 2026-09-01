@@ -30,7 +30,7 @@ const DRY = process.argv.includes("--dry");
 const ALL = process.argv.includes("--all");
 
 const { query, pool } = await import("../src/lib/db.ts");
-const { indexRevisionFile, INDEX_VERSION } = await import("../src/lib/doc/index-store.ts");
+const { indexRevisionFile, indexFile, INDEX_VERSION } = await import("../src/lib/doc/index-store.ts");
 
 /* Revisions worth considering: one that points at a file. Without --all, the
    ones that have no chunks at the current index version — which is both "never
@@ -77,10 +77,42 @@ for (const r of todo) {
   }
 }
 
+/* Files that were never registered as documents.
+   Most projects never run the register - production carries 123 ingested files
+   and zero revisions - so a backfill that only walks revisions walks nothing. */
+const files = await query(
+  `SELECT f.id, f.tenant_id, f.project_id, f.filename,
+          (SELECT COUNT(*) FROM chunk c
+            WHERE c.source_kind = 'file_page' AND c.source_id = f.id
+              AND c.index_version = ?) AS chunks
+     FROM file f
+    WHERE f.status = 'ingested'
+      AND NOT EXISTS (SELECT 1 FROM document_revision v WHERE v.file_id = f.id)
+    ORDER BY f.created_at ASC`,
+  [INDEX_VERSION],
+);
+const fileTodo = ALL ? files : files.filter((f) => Number(f.chunks) === 0);
+
+if (fileTodo.length) {
+  console.log(`\n${files.length} unregistered file(s) · ${fileTodo.length} to index\n`);
+  for (const f of fileTodo) {
+    const label = String(f.filename ?? f.id).slice(0, 40).padEnd(42);
+    if (DRY) { console.log(`  would index  ${label}`); continue; }
+    try {
+      const res = await indexFile(f.tenant_id, f.project_id, f.id);
+      if (!res) { empty++; console.log(`  no text      ${label} — no extracted pages (a scan awaiting OCR?)`); }
+      else { indexed++; chunks += res.chunks; console.log(`  indexed      ${label} ${String(res.chunks).padStart(4)} passages`); }
+    } catch (e) {
+      failed++;
+      console.error(`  FAILED       ${label} ${e?.message ?? e}`);
+    }
+  }
+}
+
 console.log(
   DRY
-    ? `\nDry run. ${todo.length} revision(s) would be indexed.`
-    : `\nIndexed ${indexed} revision(s), ${chunks} passages.` +
+    ? `\nDry run. ${todo.length} revision(s) and ${fileTodo.length} file(s) would be indexed.`
+    : `\nIndexed ${indexed} item(s), ${chunks} passages.` +
       (empty ? ` ${empty} had no extractable text.` : "") +
       (failed ? ` ${failed} failed.` : ""),
 );

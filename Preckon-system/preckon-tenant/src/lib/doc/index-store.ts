@@ -73,6 +73,70 @@ export async function indexRevision(
 }
 
 /**
+ * Index an uploaded file that is not (yet) a registered document.
+ *
+ * WHY THIS EXISTS ALONGSIDE indexRevisionFile. Hanging indexing off addRevision
+ * is correct and, on the production data, indexes nothing: there are 123
+ * ingested files and zero document revisions, because the register is a
+ * DocLogix workflow most projects never run. A retrieval layer that only works
+ * for documents somebody formally registered is a retrieval layer that is empty
+ * on every real project.
+ *
+ * chunk.revision_id is nullable and source_kind/source_id carry the real
+ * identity, so the schema already expected this. A file-sourced chunk has no
+ * revision, and is therefore always current — there is no supersession to
+ * reason about until somebody registers it, at which point the revision path
+ * takes over and this one stops being used for that document.
+ */
+export async function indexFile(
+  tenantId: string, projectId: string, fileId: string,
+): Promise<IndexResult | null> {
+  const pages = await query<{ page_no: number; text: string }>(
+    `SELECT page_no, text FROM file_page
+      WHERE tenant_id = ? AND file_id = ?
+      ORDER BY page_no`,
+    [tenantId, fileId],
+  );
+  const usable = pages.filter((p) => String(p.text ?? "").trim().length > 0);
+  if (!usable.length) return null;
+
+  const chunks = chunkDocument(usable.map((p) => ({ page: p.page_no, text: p.text })));
+
+  const existing = await query<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM chunk
+      WHERE tenant_id = ? AND source_kind = 'file_page' AND source_id = ? AND index_version = ?`,
+    [tenantId, fileId, INDEX_VERSION],
+  );
+  const replaced = Number(existing[0]?.n ?? 0);
+
+  await query(
+    `DELETE FROM chunk
+      WHERE tenant_id = ? AND source_kind = 'file_page' AND source_id = ? AND index_version = ?`,
+    [tenantId, fileId, INDEX_VERSION],
+  );
+
+  for (const c of chunks) {
+    await query(
+      `INSERT INTO chunk
+         (id, tenant_id, project_id, source_kind, source_id, revision_id, page_number,
+          ordinal, text, token_count, index_version)
+       VALUES (?,?,?,?,?,NULL,?,?,?,?,?)`,
+      [newId(), tenantId, projectId, "file_page", fileId,
+       c.page ?? null, c.ordinal, c.text, c.tokens, INDEX_VERSION],
+    );
+  }
+
+  return {
+    revisionId: fileId,
+    chunks: chunks.length,
+    replaced,
+    why: replaced
+      ? `Re-indexed ${chunks.length} passages from the file, replacing ${replaced}.`
+      : `Indexed ${chunks.length} passages from the file.`,
+  };
+}
+
+/**
  * Index a revision from the pages of the file it points at.
  *
  * WHY THE REVISION AND NOT THE FILE. search() joins chunk -> document_revision
@@ -166,15 +230,26 @@ export async function search(
     return { hits: [], tokensUsed: 0, dropped: 0, searchedHistory: includeHistory, why: "No question given." };
   }
 
-  const stateClause = includeHistory ? "" : " AND v.state = 'current'";
+  /* A revision-less chunk (an uploaded file nobody registered) has no state to
+     be current or superseded, so it must pass this filter rather than be
+     silently dropped by it. */
+  const stateClause = includeHistory ? "" : " AND (c.revision_id IS NULL OR v.state = 'current')";
 
+  /* LEFT JOIN, not JOIN.
+     An inner join here means a chunk is only findable once its document has
+     been through the register - and on real projects most files never are. The
+     result was an index that could be full and still answer nothing.
+     A chunk with no revision has no supersession to reason about, so it is
+     always current; the state filter applies only where a revision exists. */
   let rows = await query<any>(
     `SELECT c.id, c.text, c.page_number AS page,
-            d.document_number, v.revision_code,
+            COALESCE(d.document_number, f.filename) AS document_number,
+            v.revision_code,
             MATCH(c.text) AGAINST (? IN NATURAL LANGUAGE MODE) AS lexical
        FROM chunk c
-       JOIN document_revision v ON v.id = c.revision_id AND v.tenant_id = c.tenant_id
-       JOIN document_register d ON d.id = v.document_id AND d.tenant_id = c.tenant_id
+       LEFT JOIN document_revision v ON v.id = c.revision_id AND v.tenant_id = c.tenant_id
+       LEFT JOIN document_register d ON d.id = v.document_id AND d.tenant_id = c.tenant_id
+       LEFT JOIN file f ON f.id = c.source_id AND f.tenant_id = c.tenant_id AND c.revision_id IS NULL
       WHERE c.tenant_id = ? AND c.project_id = ?
         AND c.index_version = ?${stateClause}
         AND MATCH(c.text) AGAINST (? IN NATURAL LANGUAGE MODE)
@@ -188,15 +263,17 @@ export async function search(
     // A LIKE scan is slower and entirely correct for the case that matters most.
     rows = await query<any>(
       `SELECT c.id, c.text, c.page_number AS page,
-              d.document_number, v.revision_code, 0 AS lexical
+              COALESCE(d.document_number, f.filename) AS document_number,
+              v.revision_code, 0 AS lexical
          FROM chunk c
-         JOIN document_revision v ON v.id = c.revision_id AND v.tenant_id = c.tenant_id
-         JOIN document_register d ON d.id = v.document_id AND d.tenant_id = c.tenant_id
+         LEFT JOIN document_revision v ON v.id = c.revision_id AND v.tenant_id = c.tenant_id
+         LEFT JOIN document_register d ON d.id = v.document_id AND d.tenant_id = c.tenant_id
+         LEFT JOIN file f ON f.id = c.source_id AND f.tenant_id = c.tenant_id AND c.revision_id IS NULL
         WHERE c.tenant_id = ? AND c.project_id = ?
           AND c.index_version = ?${stateClause}
-          AND (c.text LIKE ? OR d.document_number LIKE ?)
+          AND (c.text LIKE ? OR d.document_number LIKE ? OR f.filename LIKE ?)
         LIMIT ?`,
-      [tenantId, projectId, INDEX_VERSION, `%${q}%`, `%${q}%`, pool],
+      [tenantId, projectId, INDEX_VERSION, `%${q}%`, `%${q}%`, `%${q}%`, pool],
     );
   }
 

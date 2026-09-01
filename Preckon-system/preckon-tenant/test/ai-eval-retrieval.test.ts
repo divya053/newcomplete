@@ -18,6 +18,8 @@
 // fail is a green tick nobody earned.
 
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   scoreRetrieval, scoreCitations, verifyCitation,
   formatRetrieval, formatCitations,
@@ -135,5 +137,36 @@ describe("citation fidelity", () => {
     const out = formatCitations(scoreCitations([{ text: "30 MPa", citedText: passage }]));
     expect(out).toMatch(/FAIL/);
     expect(out).toMatch(/does not contain/);
+  });
+});
+
+describe("an uploaded file is findable without being registered", () => {
+  // The join in search() was INNER, so a chunk was only findable once its
+  // document had been through the DocLogix register. Production carries 123
+  // ingested files and ZERO revisions, so that index could be full and still
+  // answer nothing. These pin the shape of the fix, because reverting to an
+  // inner join looks tidier and breaks retrieval on every real project.
+  const src = readFileSync(join(__dirname, "..", "src", "lib", "doc", "index-store.ts"), "utf8");
+
+  it("joins the register loosely, so a revision-less chunk survives", () => {
+    expect(src).not.toMatch(/\n\s+JOIN document_revision/);
+    expect(src).toMatch(/LEFT JOIN document_revision/);
+    expect(src).toMatch(/LEFT JOIN document_register/);
+  });
+
+  it("the current-revision filter admits a chunk that has no revision", () => {
+    // ` AND v.state = 'current'` alone silently drops every unregistered file.
+    expect(src).toMatch(/c\.revision_id IS NULL OR v\.state = 'current'/);
+  });
+
+  it("falls back to the filename when there is no document number", () => {
+    expect(src).toMatch(/COALESCE\(d\.document_number, f\.filename\)/);
+  });
+
+  it("indexFile writes a NULL revision, not a borrowed one", () => {
+    /* Putting the file id in revision_id would satisfy the column and break
+       the join it feeds — indexed, counted, permanently unfindable. */
+    const fn = src.slice(src.indexOf("export async function indexFile"));
+    expect(fn.slice(0, fn.indexOf("\n}"))).toMatch(/revision_id[\s\S]*?VALUES \(\?,\?,\?,\?,\?,NULL,/);
   });
 });

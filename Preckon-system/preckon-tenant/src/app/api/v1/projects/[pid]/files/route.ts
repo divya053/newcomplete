@@ -5,6 +5,8 @@ import { route, ok } from "@/lib/http";
 import { requirePermission, requireProject } from "@/lib/context";
 import { query } from "@/lib/db";
 import { newId } from "@/lib/ids";
+import { indexFile } from "@/lib/doc/index-store";
+import { logWarn } from "@/lib/log";
 import { actorFromCtx, useCase } from "@/lib/usecase";
 import { errBadRequest } from "@/lib/errors";
 import { checkUpload } from "@/lib/upload-safety";
@@ -178,11 +180,32 @@ export const POST = route<{ pid: string }>(async (req, ctx, { pid }) => {
     });
   });
 
+  /* Index the extracted text for retrieval.
+   *
+   * As a FILE, with no revision behind it. Most projects never run the DocLogix
+   * register - production carries 123 ingested files and zero revisions - so
+   * indexing only on registration produces an index that is empty on every real
+   * project. chunk.revision_id is nullable and source_kind/source_id carry the
+   * identity, which is what the schema expected.
+   *
+   * After the transaction, because chunking is CPU work that should not hold a
+   * write open. Inside a try, because the bytes are stored and the file row is
+   * committed either way: an upload that 500s because its search index would
+   * not build loses the document to save the convenience of finding it. */
+  let indexed = 0;
+  try {
+    const res = await indexFile(ctx.tenantId, pid, id);
+    indexed = res?.chunks ?? 0;
+  } catch (e) {
+    logWarn("doc.index_failed", { fileId: id, error: String(e) });
+  }
+
   return ok(
     {
       id,
       filename: file.name,
       pages: pages.length,
+      indexed,
       status,
       ...(cad && !cad.ok ? { error: cad.error } : {}),
       // The uploader is told at once. Finding out that a drawing set was never
