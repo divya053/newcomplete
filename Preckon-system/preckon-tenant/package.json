@@ -14,7 +14,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit",
-    "eval": "vitest run test/ai-eval.test.ts --reporter=verbose",
+    "eval": "node --import tsx scripts/eval-retrieval.mjs",
     "reindex": "node --import tsx scripts/reindex-documents.mjs"
   },
   "dependencies": {

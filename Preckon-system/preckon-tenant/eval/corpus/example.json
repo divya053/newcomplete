@@ -1,0 +1,39 @@
+{
+  "$comment": [
+    "A retrieval corpus for one golden project. Copy this per project and name",
+    "the file after the project code.",
+    "",
+    "HOW TO WRITE A CASE. Ask the question the way an estimator would ask it,",
+    "not the way the document is worded - retrieval that only works when you",
+    "already know the phrasing is retrieval that only works for the person who",
+    "wrote the test.",
+    "",
+    "Name a page only when the answer is genuinely on that page. A case naming",
+    "only the document passes on any page of it, which is right for a question",
+    "the whole document answers; over-specifying makes a correct answer fail.",
+    "",
+    "'note' is printed when the case misses. Say why the case exists, so a",
+    "failure leads somewhere instead of being a number that went down."
+  ],
+  "project": "EXAMPLE-001",
+  "cases": [
+    {
+      "id": "R1",
+      "question": "what concrete strength is specified for the structural slabs",
+      "expect": { "documentNumber": "SPEC-S-001", "page": 1 },
+      "note": "The single most-asked question on any structural package."
+    },
+    {
+      "id": "R2",
+      "question": "fire rating between the plant room and the corridor",
+      "expect": { "documentNumber": "SPEC-A-002" },
+      "note": "Whole-document case: the fire strategy is stated in several places."
+    },
+    {
+      "id": "R3",
+      "question": "A-201",
+      "expect": { "documentNumber": "DWG-A-201" },
+      "note": "Identifier-only. FULLTEXT drops tokens this short, so this case exercises the LIKE fallback rather than the index."
+    }
+  ]
+}
