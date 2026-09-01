@@ -147,9 +147,15 @@ foreach ($t in $Targets) {
                        the monorepo before this path was switched on. If someone
                        edits a shared file on GitHub again, bring it back here
                        first or this will quietly undo it. #>
-                    $unrelated = (git merge "$($t.Remote)/main" --no-edit 2>&1 |
-                                  Select-String -Pattern 'unrelated histories' -Quiet)
-                    Invoke-Git @('merge', '--abort') | Out-Null
+                    # Ask git directly whether the histories share an ancestor.
+                    # The first version of this parsed the words "unrelated
+                    # histories" out of a bare `git merge`, which never ran:
+                    # $ErrorActionPreference='Stop' turns any native command's
+                    # stderr into a terminating error, so the detection threw
+                    # before it could decide anything and the whole target was
+                    # logged as an unexplained ERROR.
+                    $mergeBase = (Invoke-Git @('merge-base', 'HEAD', "$($t.Remote)/main"))
+                    $unrelated = ($mergeBase -ne 0)
 
                     if (-not $unrelated) {
                         # A real content conflict. Stopping is correct: the
