@@ -17,6 +17,8 @@ import {
   type RevisionScheme, type RevisionRow,
   nextRevision, planSupersession, isValidRevision, parseRevision, compareRevisions,
 } from "./revision";
+import { indexRevisionFile } from "./index-store";
+import { logWarn } from "../log";
 
 export interface RegisterRow {
   id: string;
@@ -277,7 +279,7 @@ export interface AddRevisionInput {
 export async function addRevision(
   tenantId: string, projectId: string, documentId: string, input: AddRevisionInput,
 ) {
-  return tx(async (conn) => {
+  const created = await tx(async (conn) => {
     const [existing] = await conn.query<any[]>(
       "SELECT id, revision_code, state, frozen, scheme FROM document_revision WHERE document_id = ? AND tenant_id = ? FOR UPDATE",
       [documentId, tenantId],
@@ -337,6 +339,27 @@ export async function addRevision(
 
     return { id, revisionCode: code, why };
   });
+
+  /* Index for retrieval, AFTER the commit.
+   *
+   * doc/retrieval.ts and doc/index-store.ts were complete and unit-tested, and
+   * nothing had ever called indexRevision — `chunk` held zero rows, so
+   * GET /documents/search queried an empty index and truthfully reported
+   * finding nothing. Every AI answer was built from whatever the caller
+   * happened to put in the envelope, which is the long-context alternative
+   * retrieval exists to replace.
+   *
+   * Outside the transaction because chunking is CPU work with no database
+   * involvement, and inside a try because an index is rebuildable while a
+   * revision is not. A document that files correctly and searches badly is a
+   * far better failure than one that would not file at all. */
+  try {
+    await indexRevisionFile(tenantId, projectId, created.id, input.fileId);
+  } catch (e) {
+    logWarn("doc.index_failed", { revisionId: created.id, error: String(e) });
+  }
+
+  return created;
 }
 
 /**

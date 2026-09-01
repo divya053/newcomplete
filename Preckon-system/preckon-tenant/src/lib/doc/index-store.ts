@@ -72,6 +72,40 @@ export async function indexRevision(
   };
 }
 
+/**
+ * Index a revision from the pages of the file it points at.
+ *
+ * WHY THE REVISION AND NOT THE FILE. search() joins chunk -> document_revision
+ * -> document_register and filters on v.state = 'current'. A chunk whose
+ * revision_id is not a real revision satisfies none of that: it is written,
+ * counted, and permanently unfindable. Indexing straight from the upload route
+ * looks right and produces exactly that — an index that reports coverage it
+ * cannot deliver, which is worse than an empty one because nobody investigates
+ * a number that looks healthy.
+ *
+ * Returns null rather than throwing when there is nothing to index: a revision
+ * with no file attached, or a file whose text extraction produced nothing (a
+ * scan awaiting OCR). Neither is an error, and neither should fail the write
+ * that created the revision.
+ */
+export async function indexRevisionFile(
+  tenantId: string, projectId: string, revisionId: string, fileId: string | null | undefined,
+): Promise<IndexResult | null> {
+  if (!fileId) return null;
+  const pages = await query<{ page_no: number; text: string }>(
+    `SELECT page_no, text FROM file_page
+      WHERE tenant_id = ? AND file_id = ?
+      ORDER BY page_no`,
+    [tenantId, fileId],
+  );
+  const usable = pages.filter((p) => String(p.text ?? "").trim().length > 0);
+  if (!usable.length) return null;
+  return indexRevision(
+    tenantId, projectId, revisionId,
+    usable.map((p) => ({ page: p.page_no, text: p.text })),
+  );
+}
+
 /** Remove a revision's chunks — used when a revision is deleted. */
 export async function dropIndex(tenantId: string, revisionId: string): Promise<number> {
   const res = await query<any>(
