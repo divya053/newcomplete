@@ -2,7 +2,7 @@
   "name": "preckon-tenant",
   "version": "1.0.0",
   "private": true,
-  "description": "Preckon Tenant Plane — Preckon Core (domain-neutral kernel) + the Construction pack, on Next.js 15 + MySQL 8. AI-native construction operating system.",
+  "description": "Preckon Tenant Plane \u2014 Preckon Core (domain-neutral kernel) + the Construction pack, on Next.js 15 + MySQL 8. AI-native construction operating system.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -14,7 +14,8 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit",
-    "eval": "vitest run test/ai-eval.test.ts --reporter=verbose"
+    "eval": "vitest run test/ai-eval.test.ts --reporter=verbose",
+    "reindex": "node --import tsx scripts/reindex-documents.mjs"
   },
   "dependencies": {
     "better-auth": "^1.2.7",
