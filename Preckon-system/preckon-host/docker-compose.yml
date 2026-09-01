@@ -12,7 +12,14 @@ services:
     image: mysql:8.0
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: preckon
+      # No literal, and no default. `:?` makes compose refuse to start rather
+      # than quietly fall back - a default here is how the production database
+      # ended up with the password "preckon" for months.
+      #
+      # NOTE: this only sets the password when the volume is FIRST created.
+      # Rotating it on a live database is an ALTER USER inside MySQL; changing
+      # this line alone changes nothing except the healthcheck's guess.
+      MYSQL_ROOT_PASSWORD: ${DATABASE_PASSWORD:?set DATABASE_PASSWORD in .env}
       MYSQL_DATABASE: preckon_host
     ports:
       # The console's MySQL was published on the wildcard address - reachable
@@ -40,7 +47,7 @@ services:
       DATABASE_HOST: db
       DATABASE_PORT: "3306"
       DATABASE_USER: root
-      DATABASE_PASSWORD: preckon
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?set DATABASE_PASSWORD in .env}
       DATABASE_NAME: preckon_host
       # CHANGE THESE for anything beyond local dev:
       BETTER_AUTH_SECRET: change-me-to-a-long-random-string-min-32-chars
@@ -77,7 +84,7 @@ services:
       DATABASE_HOST: db
       DATABASE_PORT: "3306"
       DATABASE_USER: root
-      DATABASE_PASSWORD: preckon
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?set DATABASE_PASSWORD in .env}
       DATABASE_NAME: preckon_host
       BETTER_AUTH_URL: http://app:3000
       # The seed creates the first Owner through the sign-up endpoint, which is
