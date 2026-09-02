@@ -14,8 +14,9 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit",
-    "eval": "node --import tsx scripts/eval-retrieval.mjs",
-    "reindex": "node --import tsx scripts/reindex-documents.mjs"
+    "eval": "vitest run test/ai-eval.test.ts test/ai-eval-retrieval.test.ts --reporter=verbose",
+    "reindex": "node --import tsx scripts/reindex-documents.mjs",
+    "eval:retrieval": "node --import tsx scripts/eval-retrieval.mjs"
   },
   "dependencies": {
     "better-auth": "^1.2.7",
