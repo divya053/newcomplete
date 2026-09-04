@@ -19,7 +19,20 @@ set -eu
 
 SERVICE=${DB_SERVICE:-db}
 USER=${DB_USER:-root}
-PASS=${DB_PASS:-preckon}
+# Read the live password from .env rather than defaulting to a literal.
+#
+# This defaulted to `preckon`, which was the password until it was rotated on
+# 2026-09-01. Cron sets no DB_PASS, so from that night the dump failed with
+# "Access denied" and wrote a 20-byte file. Three nights ran that way. The guard
+# below caught it every time and said so in the log; nobody reads the log.
+#
+# A backup whose credential can drift from the database's is a backup that will
+# stop working on exactly the day somebody improves security, which is the worst
+# possible day for it to stop.
+if [ -z "${DB_PASS:-}" ] && [ -f .env ]; then
+  DB_PASS=$(grep -m1 '^DATABASE_PASSWORD=' .env | cut -d= -f2- | tr -d '')
+fi
+PASS=${DB_PASS:?set DATABASE_PASSWORD in .env, or pass DB_PASS}
 NAME=${DB_NAME:-preckon_tenant}
 DIR=${BACKUP_DIR:-/opt/preckon-backups}
 KEEP=${BACKUP_KEEP:-14}
