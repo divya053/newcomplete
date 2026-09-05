@@ -2,7 +2,7 @@
 
 **Everything needed to get in, run it, deploy it, and know whether it is working**
 
-4 September 2026
+5 September 2026
 
 The complete reference for the Preckon platform: two planes, one VPS, four repositories. It
 supersedes the 3 September consolidated document and the v2.x access revisions, and folds
@@ -10,13 +10,13 @@ their content into a single document that can be read start to finish by someone
 never seen the system.
 
 Everything here is read from the repository, the compose files and the git remotes on
-4 September 2026. Where a fact can only come from the running server, it is marked **OPEN**
+5 September 2026. Where a fact can only come from the running server, it is marked **OPEN**
 and Part 10 gives the command that answers it. Nothing has been assumed to be true because
 it ought to be.
 
 | Parts | Defects logged | Need one command | Decisions needed | Review points closed |
 |---|---|---|---|---|
-| 11 | 10 | 4 | 3 | 9 |
+| 11 | 12 | 4 | 3 | 9 |
 
 > ### READ THIS BEFORE ANYTHING ELSE
 >
@@ -24,8 +24,10 @@ it ought to be.
 > passwords in plain text. This monorepo autosyncs to a **public** GitHub repository every
 > ten minutes, and has since July. Those passwords are absent here — which is cleanup, not
 > remediation. They are in the history of a public repository and cannot be taken back.
-> Rotate all four. Part 7.4 gives the order that actually closes it, and Part 10 records
-> that two more published passwords are still committed in README and compose files today.
+> Rotate all four. Part 7.4 gives the order that actually closes it, and §10.1 records that
+> the two console passwords are **still committed in five tracked files today** — including
+> two seed scripts that silently fall back to them, so running the host seed with no
+> environment provisions a publicly-known credential and reports success.
 
 ## How to read this
 
@@ -274,7 +276,7 @@ the console starts clean. `db/seed-demo.sql` adds fake tenants, invoices and not
 you want something to look at.
 
 > **Override the seeded password.** `npm run seed:owner` defaults to a published credential —
-> see D8. Always pass your own:
+> see D9. Always pass your own:
 > `OWNER_EMAIL=you@techsme.com OWNER_PASSWORD='min-12-chars' npm run seed:owner`.
 > The script reuses an existing account rather than resetting it, so this is safe to run
 > against a box where the password has already been rotated.
@@ -287,7 +289,7 @@ you want something to look at.
 > whose entire body is `seedCatalog()`. It registers the construction pack and nothing else.
 > `TENANT_OWNER_EMAIL` and `TENANT_OWNER_PASSWORD` are passed into that container
 > (`docker-compose.yml:164–165`) and are **never read by the command it runs**. The tenant
-> README describes this step as "seed demo tenant/owner/project", which it is not. **(D9)**
+> README describes this step as "seed demo tenant/owner/project", which it is not. **(D11)**
 
 Logins are created by two separate scripts, run over HTTP against the **already-running app**
 — not by the compose seed.
@@ -655,7 +657,7 @@ public for six weeks cannot be made private retroactively. The order matters:
    a decision rather than a task.
 2. **Delete the credential files from the monorepo.** That fixes the working copy,
    `preckon-system` on its next publish, and every future push to the public repo.
-3. **Fix the two that are still committed today** — D8 and D10 in §10.1. Rotating a password
+3. **Fix the five files that still carry them** — D8, and the silent seed fallbacks in D9. Rotating a password
    that a README still documents achieves less than it looks.
 4. **Delete `pre-sync-2026-08-13`**, after confirming nobody wants the initial-commit lineage.
    If they do, tag it once the file is purged.
@@ -814,15 +816,46 @@ audit entry through the chain's stored procedure. Verify after with `GET /api/v1
 | D5 | `scripts/backup.sh` | Covers `preckon_tenant` only; backups live on the disk they protect; uploads not covered | High |
 | D6 | deploy design | No rollback path exists — §6.3 | High |
 | D7 | `preckon-host` compose:53–55 | `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` and `INTERNAL_SERVICE_TOKEN` are hardcoded `change-me-*` literals, **not** read from `.env`, despite the README saying to change them there | High |
-| D8 | `preckon-host` compose:94 and README step 4 | A published console password committed as a literal in two files that sync to a public repository. The seed reuses an existing account rather than resetting it, so rotation holds — but the literal stays readable | High |
-| D9 | `preckon-tenant` compose:164–165 | The seed service demands `TENANT_OWNER_PASSWORD` with `:?` and never reads it; `TENANT_OWNER_EMAIL` is still `owner@riverside.build`; the README calls this step "seed demo tenant/owner/project" | Medium |
-| D10 | `preckon-tenant` README quick start | Documents a stale login and a pre-rotation phpMyAdmin password | Medium |
+| D8 | five tracked files, below | The two published console passwords are still committed as literals in files that sync to a public repository | High |
+| D9 | `preckon-host/scripts/seed-owner.mjs:17`, `seed-staff.mjs:13` | Both **silently default** to a published password: `process.env.OWNER_PASSWORD ?? "preckon-admin-2026"`. Running either seed with no environment provisions a publicly-known credential and reports success | **Critical** |
+| D10 | `preckon-host/.github/workflows/ci.yml` | The host plane's CI has **no secret scan**. The tenant plane's runs gitleaks over full history as its own job. This is why the asymmetry in D8 exists | High |
+| D11 | `preckon-tenant` compose:164–165 | The seed service demands `TENANT_OWNER_PASSWORD` with `:?` and never reads it; `TENANT_OWNER_EMAIL` is still `owner@riverside.build`; the README calls this step "seed demo tenant/owner/project" | Medium |
+| D12 | `preckon-tenant` README quick start | Documents a stale login and a pre-rotation phpMyAdmin password | Medium |
 
 > **Four files, one fix.** D1 to D4 are the same stale literal in four places, and the fix is the
 > one already applied to `backup.sh` in commit `bae5035`: read `DATABASE_PASSWORD` from `.env`
 > rather than defaulting to a value that was true until somebody improved security. A credential
 > that can drift from the database's is one that will stop working on exactly the day it is
 > rotated — the worst possible day for it to stop.
+
+### D8 in full — where the published passwords still are
+
+A sweep of the tracked tree on 5 September, after removing them from
+`preckon-host/DEMO-CREDENTIALS.md`:
+
+| File | Occurrences | Kind |
+|---|---|---|
+| `preckon-host/scripts/seed-owner.mjs` | 2 | **Silent fallback** — see D9 |
+| `preckon-host/scripts/seed-staff.mjs` | 1 | **Silent fallback** — see D9 |
+| `preckon-host/docker-compose.yml` | 1 | `OWNER_PASSWORD:` literal on the seed service |
+| `preckon-host/README.md` | 2 | Documentation, steps 4 and "Run with Docker" |
+| `preckon-tenant/IMPLEMENTATION.md` | 2 | Documentation, lines 224 and 241 |
+| `preckon-tenant/test/scan-secrets.test.ts` | 2 | **Legitimate** — a regression fixture asserting the scanner catches this literal. Leave it |
+
+`preckon-host/DEMO-CREDENTIALS.md` carried three more and has been rewritten to hold
+none — it now points at `OWNER_PASSWORD` the way the tenant file points at
+`TENANT_OWNER_PASSWORD`.
+
+> ### The asymmetry is structural, not an oversight
+>
+> The tenant plane was hardened and the host plane was not, because the guard only exists
+> on one of them. The tenant repo has `scripts/scan-secrets.mjs`, a regression test for
+> this exact literal, and a CI job running gitleaks with `fetch-depth: 0` — full history,
+> because a secret removed from the tip is still a secret. The host repo's CI runs
+> typecheck, Playwright and a Docker smoke test, and nothing else. Its seed scripts still
+> default to published credentials while the tenant's equivalents call `required()` and
+> exit `2`. Fixing D8 file by file without adding the scan to the host plane leaves nothing
+> to stop it recurring.
 
 ## 10.2 Four things need one command on the box
 
@@ -877,7 +910,7 @@ Passwords are deliberately absent. Where each one comes from:
 
 | Identity | Plane | Role | Password source |
 |---|---|---|---|
-| `admin@techsme.com` | host | Owner | **Rotate** — published. Also a committed literal, D8 |
+| `admin@techsme.com` | host | Owner | **Rotate** — published. Also a committed literal, D8/D9 |
 | `shruthi@techsme.com` | host | Admin | **Rotate** — published |
 | `pranavi@techsme.com` | host | Admin | **Rotate** — published |
 | `owner@aigcc.group` | tenant | Owner | `SEED_OWNER_PASSWORD`, via `seed-aigcc.mjs` |
@@ -886,7 +919,7 @@ Passwords are deliberately absent. Where each one comes from:
 
 None of these are created by the compose seed — §3.4. The stale `Riverside` name is still live
 rather than a documentation leftover: `TENANT_OWNER_EMAIL: owner@riverside.build` in the tenant
-compose seed service (D9), and in the tenant README's quick start (D10).
+compose seed service (D11), and in the tenant README's quick start (D12).
 
 ## 11.3 Environment variables
 
@@ -994,6 +1027,6 @@ preckon-tenant/docs/qa/preckon-qa-results.csv
 AutoCAD-BOQ-Tender/.gitmodules         AutoCAD-BOQ-Tender/TECHNICAL_DOCUMENTATION.md
 ```
 
-Repository facts read from the git remotes, the index and the working tree on 4 September 2026.
+Repository facts read from the git remotes, the index and the working tree on 5 September 2026.
 Server facts marked **Open** in §10.2 are read from the repository's own records of the server,
 not from the server itself.

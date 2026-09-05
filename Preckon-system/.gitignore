@@ -69,3 +69,7 @@ desktop.ini
 
 # ---- Disabled nested repo histories (kept locally, not published) ----
 .git.disabled/
+
+# Word lock/owner files. They are transient, they get committed by the
+# ten-minute autosync, and this repository is published publicly.
+~$*
