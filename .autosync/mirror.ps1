@@ -170,9 +170,31 @@ foreach ($t in $Targets) {
                     $prefixPath = Join-Path $Repo $t.Prefix
                     # Tracked files only: git archive of the subtree, so no
                     # node_modules, no .next, nothing .gitignore'd.
+                    # Via a FILE, not a pipe. PowerShell's pipeline decodes a
+                    # native command's output as text, so piping git archive
+                    # into tar handed it a mangled stream: tar.exe answered
+                    # "Unrecognized archive format", nothing was extracted, the
+                    # staged-change check below found nothing, and the run
+                    # logged "already current" and STAMPED the target as
+                    # published. A green line for work that never happened - and
+                    # the stamp meant every later run skipped it too.
+                    $tar = Join-Path $env:TEMP "preckon-overlay-$($t.Name).tar"
                     Push-Location $Repo
-                    try { & git archive "HEAD:$($t.Prefix)" | & tar -x -C $tree }
+                    try { $rc = Invoke-Git @('archive', '-o', $tar, "HEAD:$($t.Prefix)") }
                     finally { Pop-Location }
+                    if ($rc -ne 0) {
+                        Write-Log 'WARN' "$name : git archive failed - NOT pushed, NOT stamped"
+                        $failed++
+                        continue
+                    }
+                    & tar -x -f $tar -C $tree
+                    $tarRc = $LASTEXITCODE
+                    Remove-Item $tar -Force -ErrorAction SilentlyContinue
+                    if ($tarRc -ne 0) {
+                        Write-Log 'WARN' "$name : tar extract failed - NOT pushed, NOT stamped"
+                        $failed++
+                        continue
+                    }
 
                     Invoke-Git @('add', '-A') | Out-Null
                     if ((git diff --cached --name-only | Measure-Object -Line).Lines -eq 0) {
