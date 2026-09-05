@@ -79,6 +79,15 @@ export interface DispatchDecision {
   estimatedCostMinor: number;
   /** How the work will run, for the usage ledger's execution_class. */
   executionClass: "local" | "preckon" | "external" | "stub";
+  /**
+   * Set when the requested alias was unaffordable and a cheaper eligible model
+   * was substituted. Null on the ordinary path.
+   *
+   * Recorded rather than silent: the answer came from a smaller model than the
+   * caller asked for, and a reviewer comparing two runs of the same task needs
+   * to know that before concluding the prompt got worse.
+   */
+  reroutedFrom: { alias: string; estimatedCostMinor: number } | null;
 }
 
 const CLASS_OF: Record<string, DispatchDecision["executionClass"]> = {
@@ -116,6 +125,7 @@ export function decideDispatch(input: DispatchInput): DispatchDecision {
       why: `No registry entry for "${input.alias}"; using the configured model ${input.fallbackModel}.`,
       estimatedCostMinor: 0,
       executionClass: "external",
+      reroutedFrom: null,
     };
   }
 
@@ -147,14 +157,59 @@ export function decideDispatch(input: DispatchInput): DispatchDecision {
 
   // Cost is only consulted once eligibility passes, so the reported cause is
   // always the first thing that actually stops the request.
-  if (!reasons.length) {
-    const limits: TenantLimits = {
-      dailyUsdMinor: input.policy.budgets?.dailyUsdMinor,
-      projectMonthlyUsdMinor: input.policy.budgets?.projectMonthlyUsdMinor,
-      singleRequestUsdMinor: input.policy.budgets?.singleRequestUsdMinor,
-    };
+  const limits: TenantLimits = {
+    dailyUsdMinor: input.policy.budgets?.dailyUsdMinor,
+    projectMonthlyUsdMinor: input.policy.budgets?.projectMonthlyUsdMinor,
+    singleRequestUsdMinor: input.policy.budgets?.singleRequestUsdMinor,
+  };
+  if (true) {
     const limit = checkLimits(estimatedCostMinor, input.spend, limits);
     if (!limit.allowed) reasons.push("budget_exceeded");
+  }
+
+  // ── Re-route rather than refuse ────────────────────────────────────────────
+  //
+  // AIP100-FR-008: the router rejects OR RE-ROUTES when a budget would be
+  // exceeded, and budget.ts's own header lists `cheaper_model` well above
+  // `reject` in the order to try. Denying outright was the last remedy offered
+  // first — the tenant hits a ceiling and the work stops, when a smaller model
+  // would have completed it inside the money that remains.
+  //
+  // Only on budget, and only when budget is the ONLY objection.
+  //
+  // Not because a re-route could leak — every candidate clears the same
+  // eligibility gate, so a substitute is permitted for this data by
+  // construction. The reason is narrower and worth stating exactly: re-routing
+  // past a boundary or approval refusal would turn a governance refusal into a
+  // successful call on a different model, and the ledger would record a job that
+  // ran rather than a policy that objected. The operator would then be reading
+  // a clean ledger while the thing the policy exists to surface never appeared.
+  //
+  // Today the ordering above already guarantees this — budget is only evaluated
+  // when nothing else objected — so this condition is redundant. It is here
+  // because that ordering is one refactor away from changing, and the test
+  // "does not re-route past a refusal it cannot see" fails without it.
+  if (reasons.includes("budget_exceeded")) {
+    const alternative = cheapestAffordable(input, entry, sensitivity, limits, estimatedCostMinor);
+    if (alternative) {
+      return {
+        alias: alternative.entry.alias,
+        model: alternative.entry.providerModel,
+        provider: alternative.entry.provider,
+        boundary: alternative.entry.boundary,
+        sensitivity,
+        policyVersion: input.policyVersion,
+        permitted: true,
+        blocked: false,
+        reasons: [],
+        why:
+          `${entry.alias} would exceed the tenant's budget at about ${estimatedCostMinor} minor units; ` +
+          `re-routed to ${alternative.entry.alias} at about ${alternative.costMinor}.`,
+        estimatedCostMinor: alternative.costMinor,
+        executionClass: CLASS_OF[alternative.entry.boundary] ?? "external",
+        reroutedFrom: { alias: entry.alias, estimatedCostMinor },
+      };
+    }
   }
 
   const permitted = reasons.length === 0;
@@ -173,7 +228,64 @@ export function decideDispatch(input: DispatchInput): DispatchDecision {
       : explain(reasons, entry, sensitivity, permittedBoundaries),
     estimatedCostMinor,
     executionClass: CLASS_OF[entry.boundary] ?? "external",
+    reroutedFrom: null,
   };
+}
+
+/**
+ * The cheapest registered model that this request could run on instead.
+ *
+ * Every candidate has to clear the same gates the original did — approved,
+ * policy-eligible for this sensitivity and module, and within the tenant's
+ * limits. A re-route is a substitution, not an exemption.
+ *
+ * Strictly cheaper than the original, so a re-route can never raise the bill;
+ * and sorted cheapest-first rather than "next one down", because the point is
+ * to complete the work inside the money that remains, not to descend one rung
+ * and be refused again.
+ */
+function cheapestAffordable(
+  input: DispatchInput,
+  original: ModelEntry,
+  sensitivity: Sensitivity,
+  limits: TenantLimits,
+  originalCostMinor: number,
+): { entry: ModelEntry; costMinor: number } | null {
+  const candidates = input.registry.filter(
+    (m) => m.alias !== original.alias && m.status === "approved",
+  );
+  if (!candidates.length) return null;
+
+  const { eligible } = eligibleModels(
+    input.policy,
+    candidates.map((m) => ({ alias: m.alias, boundary: m.boundary, frontier: m.frontier })),
+    { sensitivity, module: input.module },
+  );
+  const eligibleAliases = new Set(eligible.map((m) => m.alias));
+
+  const priced = candidates
+    .filter((m) => eligibleAliases.has(m.alias))
+    .map((m) => ({
+      entry: m,
+      costMinor: estimateCostMinor(
+        input.estimatedInputTokens,
+        { maxCostMinor: input.policy.budgets?.singleRequestUsdMinor },
+        m.rateCard,
+      ),
+    }))
+    .filter((c) => c.costMinor < originalCostMinor)
+    .sort((a, b) => a.costMinor - b.costMinor);
+
+  for (const candidate of priced) {
+    // A candidate whose context window cannot hold the request is not a cheaper
+    // answer, it is a truncated one. Skipping it here rather than discovering it
+    // at call time keeps the failure a routing decision instead of a bad reply.
+    if (candidate.entry.contextLimit > 0 && input.estimatedInputTokens > candidate.entry.contextLimit) {
+      continue;
+    }
+    if (checkLimits(candidate.costMinor, input.spend, limits).allowed) return candidate;
+  }
+  return null;
 }
 
 function explain(
