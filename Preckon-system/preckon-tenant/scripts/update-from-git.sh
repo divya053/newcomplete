@@ -79,10 +79,17 @@ want host   && sync_plane preckon-host
 if want tenant && [ -d /opt/preckon-tenant ]; then
   cd /opt/preckon-tenant
   echo "→ migrations"
-  for m in db/migrations/*.sql; do
-    echo "   $m"
-    docker compose exec -T db mysql -uroot -ppreckon preckon_tenant < "$m"
-  done
+  # Delegates to migrate.sh rather than carrying a second copy of the loop.
+  #
+  # The copy that used to live here hardcoded `-ppreckon`, which stopped being
+  # the password on 2026-09-01. Under `set -euo pipefail` that aborted the
+  # deploy at this line, before anything was built — so the documented deploy
+  # path had not worked since the rotation. Two loops against the same database
+  # is how one of them silently falls behind the other.
+  #
+  # migrate.sh reads DATABASE_PASSWORD from .env, stops at the first failure
+  # rather than half-migrating, and reports per file.
+  sh scripts/migrate.sh
   # Artifact payload schemas live in the DATABASE, registered from the pack at
   # seed time — they are not read from source. Skipping this leaves the server
   # validating against the previous shape, and every agent or editor write that

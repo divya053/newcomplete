@@ -38,8 +38,9 @@ cd /opt/preckon-tenant
 grep -q '^ANTHROPIC_API_KEY=' .env || echo 'ANTHROPIC_API_KEY=sk-ant-...' >> .env
 
 # New table for BIM Studio. Idempotent — safe to re-run.
-docker compose exec -T db mysql -uroot -ppreckon preckon_tenant \
-  < db/migrations/004_bim_document.sql
+# migrate.sh reads DATABASE_PASSWORD from .env. Every migration is guarded on
+# information_schema, so it is safe on every deploy and safe to run twice.
+sh scripts/migrate.sh
 
 docker compose up -d --build app worker
 ```
@@ -58,7 +59,8 @@ curl -s -X POST http://localhost:4000/claude \
   -d '{"model":"claude-opus-4-8","maxTokens":20,"messages":[{"role":"user","content":"say ready"}]}'
 
 # The table exists
-docker compose exec -T db mysql -uroot -ppreckon preckon_tenant \
+DBP=$(grep -m1 '^DATABASE_PASSWORD=' .env | cut -d= -f2-)
+docker compose exec -T db mysql -uroot -p"$DBP" preckon_tenant \
   -e 'SHOW TABLES LIKE "bim_document"'
 
 # Sign-in still works through the public origin

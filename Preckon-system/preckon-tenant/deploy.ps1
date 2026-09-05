@@ -51,7 +51,16 @@ if (-not [Net.IPAddress]::TryParse($env:PRECKON_HOST, [ref]$parsedIp)) {
   }
 }
 $Server  = "root@$($env:PRECKON_HOST)"
-$DbPass  = if ($env:DATABASE_PASSWORD) { $env:DATABASE_PASSWORD } else { "preckon" }
+# No default. This defaulted to "preckon", which stopped being the password on
+# 2026-09-01; the verification step below then failed against a database that was
+# working perfectly, which sends you looking at the wrong thing. The server reads
+# its own .env, so the only case that needs this is a check run from here.
+$DbPass  = $env:DATABASE_PASSWORD
+if (-not $DbPass) {
+  Write-Host 'Set DATABASE_PASSWORD first, e.g.  $env:DATABASE_PASSWORD = "..."' -ForegroundColor Red
+  Write-Host 'It is the value in /opt/preckon-tenant/.env on the server.' -ForegroundColor Red
+  exit 1
+}
 $Root    = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)  # ...\Preckon-system
 $Bundle  = Join-Path $Root "preckon-tenant.tgz"
 

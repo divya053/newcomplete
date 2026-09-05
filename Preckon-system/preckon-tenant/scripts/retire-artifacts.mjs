@@ -35,11 +35,26 @@ if (!projectId) {
   process.exit(1);
 }
 
+function required(name) {
+  const v = process.env[name];
+  if (!v) {
+    console.error(`
+${name} is not set. Read it from /opt/preckon-tenant/.env
+`);
+    process.exit(2);
+  }
+  return v;
+}
+
 const conn = await mysql.createConnection({
   host: process.env.DATABASE_HOST ?? "127.0.0.1",
   port: Number(process.env.DATABASE_PORT ?? 3308),
   user: process.env.DATABASE_USER ?? "root",
-  password: process.env.DATABASE_PASSWORD ?? "preckon",
+  // No default. A silent fallback to a literal means this connects to nothing
+  // and reports a confusing auth error, or worse connects to a stale local
+  // database and supersedes the wrong artifacts. The value rotated on
+  // 2026-09-01; the literal that used to be here has not been the password since.
+  password: required("DATABASE_PASSWORD"),
   database: process.env.DATABASE_NAME ?? "preckon_tenant",
 });
 

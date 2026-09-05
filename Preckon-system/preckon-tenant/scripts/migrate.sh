@@ -19,7 +19,22 @@ set -eu
 DIR=${MIGRATIONS_DIR:-db/migrations}
 SERVICE=${DB_SERVICE:-db}
 USER=${DB_USER:-root}
-PASS=${DB_PASS:-preckon}
+# Read the live password from .env rather than defaulting to a literal.
+#
+# This defaulted to `preckon`, which was the password until it was rotated on
+# 2026-09-01. Every migration run since then has failed on "Access denied" —
+# and because update-from-git.sh runs migrations under `set -euo pipefail`, that
+# aborted the whole deploy before it built anything. The same defaulted literal
+# had already broken the nightly backup for three nights. It existed in five
+# places; backup.sh was fixed in bae5035 and the rest went with this change —
+# update-from-git.sh now calls this script instead of carrying its own loop.
+#
+# A credential that can drift from the database's is one that stops working on
+# exactly the day somebody improves security.
+if [ -z "${DB_PASS:-}" ] && [ -f .env ]; then
+  DB_PASS=$(grep -m1 '^DATABASE_PASSWORD=' .env | cut -d= -f2- | tr -d '\r')
+fi
+PASS=${DB_PASS:?set DATABASE_PASSWORD in .env, or pass DB_PASS}
 NAME=${DB_NAME:-preckon_tenant}
 
 if [ ! -d "$DIR" ]; then
