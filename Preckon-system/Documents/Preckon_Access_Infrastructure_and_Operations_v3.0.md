@@ -16,7 +16,7 @@ it ought to be.
 
 | Parts | Defects logged | Need one command | Decisions needed | Review points closed |
 |---|---|---|---|---|
-| 11 | 12 | 4 | 3 | 9 |
+| 11 | 15 | 3 | 3 | 9 |
 
 > ### READ THIS BEFORE ANYTHING ELSE
 >
@@ -28,6 +28,15 @@ it ought to be.
 > the two console passwords are **still committed in five tracked files today** — including
 > two seed scripts that silently fall back to them, so running the host seed with no
 > environment provisions a publicly-known credential and reports success.
+
+> ### AND A SECOND EXPOSURE, OUTSIDE THE REPOSITORY
+>
+> A 4 September version of the previous access document was circulated to the team chat
+> carrying **live values**: the Anthropic API key, both database passwords, the host service
+> token and the host auth secret. **None of them are in git** — the tree and the full history
+> were both checked and are clean — so the exposure is the chat and whoever holds that file.
+> §7.5 lists what to rotate, in order. Revoke the API key first: it is the only one that
+> spends money while you decide.
 
 ## How to read this
 
@@ -220,6 +229,12 @@ token as a bearer credential (`preckon-host/src/lib/integrations.ts:109`), and t
 validates it against its own value. If the two differ, tenant creation fails with a 401 and
 nothing else looks wrong. The same token gates the tenant's whole `/internal` surface — job
 callbacks from the worker, and both seed scripts.
+
+> **They do not match today — D15.** A 4 September capture of both running environments shows
+> the host on a generated token and the tenant on the published placeholder
+> `change-me-service-token`. Per the paragraph above, **Host → Tenant provisioning is failing
+> with a 401 right now**, and has been. If nobody has been able to create a tenant from the
+> console, this is why — not the console.
 
 ---
 
@@ -431,6 +446,12 @@ docker compose logs worker | grep 'Claude:'
 The worker announces this at boot rather than letting it be discovered one job at a time, and
 prints a warning line if stubs are permitted in production. Read the boot line rather than the
 `.env` file — the file is not necessarily what the running container has.
+
+> **Answered: the live box is not stubbing.** A capture of the running tenant environment on
+> 4 September carries `NODE_ENV=production` and **no `DEMO_STUB_MODE` at all**. Unset plus
+> production means stub output is refused, so what the workspace shows is real Claude output.
+> The same capture shows `ANTHROPIC_API_KEY` absent from the **app** container — the
+> worker-only boundary holding exactly as QA case T-88 requires.
 
 ## 5.3 Cost is metered per attempt
 
@@ -669,6 +690,29 @@ public for six weeks cannot be made private retroactively. The order matters:
 The branch-by-branch detail — which refs still serve `DEMO-CREDENTIALS.md`, and why
 `preckon-system` holds both copies — is in `Preckon_Branches_and_Repositories_v1.0.docx`.
 
+## 7.5 The document that was circulated, and what to rotate
+
+Separately from the repository exposure in §7.4, a 4 September version of the previous access
+document was shared to the team chat with live values pasted into its environment section.
+That file is **not in git** — the tracked tree and the full history were both checked and are
+clean — so the exposure is the chat and whoever holds a copy. It is bounded, but everything in
+it must be treated as known.
+
+| What was in it | Action | Order |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | Revoke and reissue in the Anthropic console | **1** — the only one that spends money while you decide |
+| Host `DATABASE_PASSWORD` | Rotate, then update `.env` on the host plane | 2 |
+| Tenant `DATABASE_PASSWORD` | Rotate, then update `.env` **and** the four stale literals in D1–D4 | 2 |
+| Host `INTERNAL_SERVICE_TOKEN` | Rotate on **both** planes to the same new value — §2.4 | 3 |
+| Host `BETTER_AUTH_SECRET` | Rotate. Invalidates every host console session | 4 |
+| Server root password | Rotate. Worth moving to key-only SSH at the same time | 4 |
+| Console and workspace passwords | Rotate — already public, §7.4 | 4 |
+
+> **Do not paste values into the replacement document either.** This one does not carry them,
+> and §2.2 is written so a new starter can be handed nine values out of band without the
+> document ever holding one. A document is the wrong container for a secret: it gets forwarded,
+> exported to PDF and attached to a chat, and every copy is permanent.
+
 ---
 
 # PART 8 — Repositories, branches and publishing
@@ -821,6 +865,9 @@ audit entry through the chain's stored procedure. Verify after with `GET /api/v1
 | D10 | `preckon-host/.github/workflows/ci.yml` | The host plane's CI has **no secret scan**. The tenant plane's runs gitleaks over full history as its own job. This is why the asymmetry in D8 exists | High |
 | D11 | `preckon-tenant` compose:164–165 | The seed service demands `TENANT_OWNER_PASSWORD` with `:?` and never reads it; `TENANT_OWNER_EMAIL` is still `owner@riverside.build`; the README calls this step "seed demo tenant/owner/project" | Medium |
 | D12 | `preckon-tenant` README quick start | Documents a stale login and a pre-rotation phpMyAdmin password | Medium |
+| D13 | tenant `.env` on the server | `INTERNAL_SERVICE_TOKEN` is the **published placeholder** `change-me-service-token`, in production. It gates the whole `/internal` surface — job callbacks, tenant bootstrap, the seed scripts — and it is printed in `.env.example` and in the compose file, so it is not a secret at all | **Critical** |
+| D14 | tenant `.env` on the server | `BETTER_AUTH_SECRET` is the published example value from `.env.example`, in production. Session tokens are forgeable by anyone who has read the repository | **Critical** |
+| D15 | both planes | The two `INTERNAL_SERVICE_TOKEN` values differ, so Host → Tenant provisioning fails with a 401 — §2.4. A broken feature rather than a risk, and it stays broken until D13 is fixed on both sides at once | High |
 
 > **Four files, one fix.** D1 to D4 are the same stale literal in four places, and the fix is the
 > one already applied to `backup.sh` in commit `bae5035`: read `DATABASE_PASSWORD` from `.env`
@@ -857,11 +904,10 @@ none — it now points at `OWNER_PASSWORD` the way the tenant file points at
 > exit `2`. Fixing D8 file by file without adding the scan to the host plane leaves nothing
 > to stop it recurring.
 
-## 10.2 Four things need one command on the box
+## 10.2 Three things need one command on the box
 
 | Question | Command |
 |---|---|
-| Live `DEMO_STUB_MODE` | `docker compose logs worker` — read the `Claude:` boot line |
 | Backup schedule | `crontab -l` |
 | TLS renewal and expiry | `certbot certificates` · `systemctl list-timers` |
 | Has the hardening runbook been run? | `ufw status verbose` · `ss -tlnp` |
@@ -869,6 +915,10 @@ none — it now points at `OWNER_PASSWORD` the way the tenant file points at
 None of these are unknowable. They are unknown because nobody with server access has run them
 and written the answer down — which is the same reason access is the blocking item, and it is
 blocking for everyone rather than for any one person.
+
+`DEMO_STUB_MODE` was on this list and is now closed — §5.2. It was answered by one capture of
+the running environment, which is the whole point: a command run once and written down removes
+a question permanently.
 
 ## 10.3 Three decisions, which are not technical questions
 
@@ -879,6 +929,23 @@ blocking for everyone rather than for any one person.
 | Whether AutoCAD-BOQ-Tender is in scope, and which copy is authoritative | Two copies exist and neither is declared canonical |
 
 ## 10.4 Not in the repository at all
+
+### Infrastructure that does not exist, rather than is undocumented
+
+| Asked for | Reality |
+|---|---|
+| Cloud provider and account, read-only non-prod role | There is **no cloud account**. One self-hosted VPS, root over SSH |
+| IaC repository and state backend | Neither exists. The server is configured by hand and by the deploy script |
+| dev / staging URLs | There is **no staging environment**. The two origins are production |
+| A non-production database | There is none. The tunnel in §2.3 reaches production |
+| ERD for Core | Not in either repository. `db/schema.sql` is the authority |
+| OpenAPI spec | Not for either plane. The only `openapi.yaml` is inside AutoCAD-BOQ-Tender |
+| Tracing dashboard | None — §8.5 |
+
+These are answers, not gaps to chase. Somebody asking for a read-only non-production role
+should be told there is no such thing here, rather than left waiting for one.
+
+### Genuinely missing, and somebody knows it
 
 - Who holds the registrar account and the DNS zone for `preckon.com`. Not derivable from the
   code, and only ever missing at the moment a certificate needs a DNS challenge.
