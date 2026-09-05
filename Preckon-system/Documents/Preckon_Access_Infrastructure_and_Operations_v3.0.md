@@ -861,7 +861,7 @@ audit entry through the chain's stored procedure. Verify after with `GET /api/v1
 | D6 | deploy design | No rollback path exists — §6.3 | High |
 | D7 | `preckon-host` compose:53–55 | `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` and `INTERNAL_SERVICE_TOKEN` are hardcoded `change-me-*` literals, **not** read from `.env`, despite the README saying to change them there | High |
 | D8 | five tracked files, below | The two published console passwords are still committed as literals in files that sync to a public repository | High |
-| D9 | `preckon-host/scripts/seed-owner.mjs:17`, `seed-staff.mjs:13` | Both **silently default** to a published password: `process.env.OWNER_PASSWORD ?? "preckon-admin-2026"`. Running either seed with no environment provisions a publicly-known credential and reports success | **Critical** |
+| D9 | `preckon-host/scripts/seed-owner.mjs:17`, `seed-staff.mjs:13` | Both **silently default** to a published password — the shape is `process.env.OWNER_PASSWORD ?? "<the published literal>"`. Running either seed with no environment provisions a publicly-known credential and reports success | **Critical** |
 | D10 | `preckon-host/.github/workflows/ci.yml` | The host plane's CI has **no secret scan**. The tenant plane's runs gitleaks over full history as its own job. This is why the asymmetry in D8 exists | High |
 | D11 | `preckon-tenant` compose:164–165 | The seed service demands `TENANT_OWNER_PASSWORD` with `:?` and never reads it; `TENANT_OWNER_EMAIL` is still `owner@riverside.build`; the README calls this step "seed demo tenant/owner/project" | Medium |
 | D12 | `preckon-tenant` README quick start | Documents a stale login and a pre-rotation phpMyAdmin password | Medium |
