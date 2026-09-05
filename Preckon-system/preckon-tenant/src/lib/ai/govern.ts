@@ -162,7 +162,7 @@ export function decideDispatch(input: DispatchInput): DispatchDecision {
     projectMonthlyUsdMinor: input.policy.budgets?.projectMonthlyUsdMinor,
     singleRequestUsdMinor: input.policy.budgets?.singleRequestUsdMinor,
   };
-  if (true) {
+  if (!reasons.length) {
     const limit = checkLimits(estimatedCostMinor, input.spend, limits);
     if (!limit.allowed) reasons.push("budget_exceeded");
   }
@@ -189,7 +189,7 @@ export function decideDispatch(input: DispatchInput): DispatchDecision {
   // when nothing else objected — so this condition is redundant. It is here
   // because that ordering is one refactor away from changing, and the test
   // "does not re-route past a refusal it cannot see" fails without it.
-  if (reasons.includes("budget_exceeded")) {
+  if (reasons.length === 1 && reasons[0] === "budget_exceeded") {
     const alternative = cheapestAffordable(input, entry, sensitivity, limits, estimatedCostMinor);
     if (alternative) {
       return {
